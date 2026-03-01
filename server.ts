@@ -53,6 +53,15 @@ db.exec(`
     night_status TEXT,    -- JSON string of checked items
     UNIQUE(user_id, date)
   );
+
+  CREATE TABLE IF NOT EXISTS diary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    date TEXT,
+    gratitude TEXT,
+    learning TEXT,
+    UNIQUE(user_id, date)
+  );
 `);
 
 // Seed initial data if empty
@@ -60,12 +69,13 @@ const dayCount = db.prepare("SELECT COUNT(*) as count FROM days").get() as { cou
 if (dayCount.count === 0) {
   const insertDay = db.prepare("INSERT INTO days (id, title, verse, reflection, application, exercise, declaration) VALUES (?, ?, ?, ?, ?, ?, ?)");
   
-  // Seed first 3 days as examples
   insertDay.run(1, "O Despertar da Identidade", "Gênesis 1:27", "Você foi criado à imagem e semelhança de Deus. Sua identidade não vem do que você faz, mas de quem você é n'Ele.", "Passe 5 minutos em silêncio hoje apenas ouvindo o que Deus diz sobre você.", "Escreva três mentiras que você acreditava sobre si mesmo e substitua-as por verdades bíblicas.", "Eu sou obra-prima de Deus, criado para grandes coisas.");
   insertDay.run(2, "A Força da Gratidão", "1 Tessalonicenses 5:18", "A gratidão abre portas para o sobrenatural. Quando agradecemos, mudamos nossa perspectiva do problema para o Provedor.", "Liste 10 coisas pelas quais você é grato hoje, mesmo as pequenas.", "Ligue para alguém hoje apenas para agradecer por algo que essa pessoa fez por você.", "Meu coração transborda gratidão e minha boca proclama as bondades do Senhor.");
   insertDay.run(3, "Vencendo o Medo", "Josué 1:9", "O medo é um ladrão de destinos. A coragem não é a ausência de medo, mas a presença de Deus que nos impulsiona.", "Identifique um passo que você tem evitado por medo e dê esse passo hoje.", "Escreva o seu maior medo e coloque o versículo de Josué 1:9 por cima dele.", "O Senhor é comigo, por isso não temerei mal algum. Sou corajoso e forte.");
   insertDay.run(4, "O Poder da Palavra", "Provérbios 18:21", "Suas palavras têm poder de vida e morte. O que você declara sobre sua vida hoje determina o seu amanhã.", "Passe o dia sem reclamar de absolutamente nada. Substitua cada queixa por um louvor.", "Escreva 5 declarações positivas sobre sua família e saúde.", "Minhas palavras são sementes de vida e prosperidade.");
   insertDay.run(5, "A Disciplina da Oração", "Mateus 6:6", "Oração não é um monólogo, é um diálogo. É no secreto que as maiores vitórias são forjadas.", "Dedique 15 minutos extras hoje apenas para conversar com Deus como um amigo.", "Escreva um pedido de oração que parece impossível e entregue-o a Deus.", "O meu Pai me ouve no secreto e me recompensa publicamente.");
+  insertDay.run(6, "Fé em Meio à Tempestade", "Marcos 4:39", "Jesus acalma a tempestade com uma palavra. A sua fé é o que te mantém firme quando o mar está agitado.", "Escolha confiar em Deus hoje mesmo que as circunstâncias pareçam contrárias.", "Desenhe um barco em meio a ondas e escreva 'Jesus está no barco'.", "A paz de Deus governa o meu coração e acalma as tempestades ao meu redor.");
+  insertDay.run(7, "O Chamado para Servir", "Gálatas 5:13", "Fomos libertos para servir uns aos outros em amor. O serviço é a maior expressão de maturidade espiritual.", "Faça algo por alguém hoje sem esperar nada em troca.", "Liste três pessoas que você pode abençoar esta semana.", "Eu nasci para servir e ser um canal das bênçãos de Deus.");
 
   // Seed Crisis Prayers
   const insertPrayer = db.prepare("INSERT INTO prayers (category, title, content, declaration) VALUES (?, ?, ?, ?)");
@@ -73,6 +83,15 @@ if (dayCount.count === 0) {
   insertPrayer.run("Medo", "Escudo e Fortaleza", "Pai, o medo tenta me paralisar. Mas Tua Palavra diz que não me deste espírito de temor, mas de poder, de amor e de moderação. Eu repreendo todo espírito de medo agora e me escondo sob Tuas asas.", "O Senhor é a minha luz e a minha salvação; de quem terei medo?");
   insertPrayer.run("Desânimo", "Renovação de Forças", "Senhor, sinto minhas forças se esgotando. Mas Tu prometeste que aqueles que esperam no Senhor renovarão suas forças. Voarão como águias. Correrão e não se cansarão.", "O Senhor é a força da minha vida. Eu me levanto em vitória.");
   insertPrayer.run("Financeiro", "O Senhor é meu Pastor", "Pai, as contas batem à porta, mas eu sei que Tu és o meu Provedor. Abro mão de toda preocupação e confio que suprirás cada uma das minhas necessidades segundo as Tuas riquezas em glória.", "O Senhor é meu pastor e nada me faltará.");
+  insertPrayer.run("Família", "Casa Edificada na Rocha", "Senhor, consagro minha família a Ti. Que nossa casa seja um lugar de paz, perdão e alegria. Protege nossos relacionamentos de toda discórdia e maldade.", "Eu e minha casa serviremos ao Senhor.");
+
+  // Seed Declarations
+  const insertDecl = db.prepare("INSERT INTO declarations (content, reference) VALUES (?, ?)");
+  insertDecl.run("Eu sou amado por Deus incondicionalmente.", "Jeremias 31:3");
+  insertDecl.run("Tudo posso naquele que me fortalece.", "Filipenses 4:13");
+  insertDecl.run("O Senhor é o meu pastor e nada me faltará.", "Salmos 23:1");
+  insertDecl.run("Sou mais que vencedor em Cristo Jesus.", "Romanos 8:37");
+  insertDecl.run("A alegria do Senhor é a minha força.", "Neemias 8:10");
 }
 
 async function startServer() {
@@ -94,6 +113,11 @@ async function startServer() {
   app.get("/api/prayers", (req, res) => {
     const prayers = db.prepare("SELECT * FROM prayers").all();
     res.json(prayers);
+  });
+
+  app.get("/api/declarations", (req, res) => {
+    const declarations = db.prepare("SELECT * FROM declarations").all();
+    res.json(declarations);
   });
 
   app.get("/api/user/:email", (req, res) => {
@@ -127,6 +151,24 @@ async function startServer() {
       morning_status = excluded.morning_status,
       night_status = excluded.night_status
     `).run(user_id, date, JSON.stringify(morning_status), JSON.stringify(night_status));
+    res.json({ success: true });
+  });
+
+  app.get("/api/diary/:userId/:date", (req, res) => {
+    const entry = db.prepare("SELECT * FROM diary WHERE user_id = ? AND date = ?")
+      .get(req.params.userId, req.params.date);
+    res.json(entry || { gratitude: "", learning: "" });
+  });
+
+  app.post("/api/diary", (req, res) => {
+    const { user_id, date, gratitude, learning } = req.body;
+    db.prepare(`
+      INSERT INTO diary (user_id, date, gratitude, learning)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, date) DO UPDATE SET
+      gratitude = excluded.gratitude,
+      learning = excluded.learning
+    `).run(user_id, date, gratitude, learning);
     res.json({ success: true });
   });
 

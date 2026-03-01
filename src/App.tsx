@@ -11,9 +11,15 @@ import {
   Sun,
   Moon,
   Lock,
-  Star
+  Star,
+  BookOpen,
+  Volume2,
+  Loader2
 } from 'lucide-react';
-import { User, Day, Prayer, Checklist } from './types';
+import { User, Day, Prayer, Checklist, Declaration } from './types';
+import { GoogleGenAI, Modality } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // --- Components ---
 
@@ -63,11 +69,16 @@ const ProgressBar = ({ current, total }: { current: number; total: number }) => 
 
 // --- Pages ---
 
-const LoginPage = ({ onLogin }: { onLogin: (email: string) => void }) => {
+const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string) => void; theme: 'light' | 'dark'; onToggleTheme: () => void }) => {
   const [email, setEmail] = useState('');
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-black">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+      <div className="absolute top-6 right-6">
+        <button onClick={onToggleTheme} className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10">
+          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+      </div>
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -75,14 +86,14 @@ const LoginPage = ({ onLogin }: { onLogin: (email: string) => void }) => {
       >
         <div className="space-y-2">
           <h1 className="text-4xl font-serif italic gold-text">Virada Espiritual</h1>
-          <p className="text-zinc-400">Sua jornada de 30 dias com Deus começa aqui.</p>
+          <p className="opacity-60">Sua jornada de 30 dias com Deus começa aqui.</p>
         </div>
 
         <div className="space-y-4">
           <input 
             type="email" 
             placeholder="Seu melhor e-mail"
-            className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-4 focus:outline-none focus:border-gold-500 transition-colors"
+            className="app-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -119,24 +130,33 @@ const HomePage = ({
   onStartDay, 
   onOpenCrisis, 
   onOpenChecklist, 
-  onOpenDeclarations 
+  onOpenDeclarations,
+  theme,
+  onToggleTheme
 }: { 
   user: User; 
   onStartDay: (dayId: number) => void;
   onOpenCrisis: () => void;
   onOpenChecklist: () => void;
   onOpenDeclarations: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }) => {
   return (
     <div className="min-h-screen pb-24">
       <header className="p-6 flex justify-between items-center">
         <div>
-          <p className="text-zinc-500 text-sm">Bem-vindo de volta,</p>
+          <p className="opacity-50 text-sm">Bem-vindo de volta,</p>
           <h2 className="text-xl font-medium">{user.name}</h2>
         </div>
-        <div className="flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-full border border-white/5">
-          <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
-          <span className="font-bold text-sm">{user.streak}</span>
+        <div className="flex items-center gap-3">
+          <button onClick={onToggleTheme} className="p-2 rounded-full border border-zinc-200 dark:border-white/10">
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <div className="flex items-center gap-2 bg-zinc-900/10 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/5">
+            <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+            <span className="font-bold text-sm">{user.streak}</span>
+          </div>
         </div>
       </header>
 
@@ -146,9 +166,9 @@ const HomePage = ({
           <div className="flex justify-between items-end">
             <div>
               <h3 className="text-2xl font-serif italic">Dia {user.progress + 1}</h3>
-              <p className="text-zinc-400 text-sm">Progresso: {user.progress}/30 dias</p>
+              <p className="opacity-60 text-sm">Progresso: {user.progress}/30 dias</p>
             </div>
-            <div className="text-gold-400 text-sm font-medium">
+            <div className="text-gold-500 text-sm font-medium">
               {Math.round((user.progress / 30) * 100)}%
             </div>
           </div>
@@ -222,9 +242,9 @@ const DayDetail = ({
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="min-h-screen bg-black pb-12"
+      className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-black/80 backdrop-blur-md z-10">
+      <header className="p-6 flex items-center gap-4 sticky top-0 bg-transparent backdrop-blur-md z-10">
         <button onClick={onBack} className="p-2 -ml-2">
           <ArrowLeft className="w-6 h-6" />
         </button>
@@ -234,34 +254,34 @@ const DayDetail = ({
       <main className="px-6 space-y-8">
         <div className="space-y-2">
           <h1 className="text-3xl font-serif italic gold-text">{day.title}</h1>
-          <div className="p-4 bg-zinc-900/50 border-l-2 border-gold-500 italic text-zinc-300">
+          <div className="p-4 bg-zinc-900/10 dark:bg-zinc-900/50 border-l-2 border-gold-500 italic opacity-80">
             "{day.verse}"
           </div>
         </div>
 
         <section className="space-y-4">
-          <h3 className="text-gold-500 font-bold uppercase text-xs tracking-widest">Reflexão</h3>
-          <p className="text-zinc-300 leading-relaxed">{day.reflection}</p>
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Reflexão</h3>
+          <p className="opacity-80 leading-relaxed">{day.reflection}</p>
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-gold-500 font-bold uppercase text-xs tracking-widest">Aplicação Prática</h3>
-          <p className="text-zinc-300 leading-relaxed">{day.application}</p>
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Aplicação Prática</h3>
+          <p className="opacity-80 leading-relaxed">{day.application}</p>
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-gold-500 font-bold uppercase text-xs tracking-widest">Exercício de Escrita</h3>
-          <p className="text-zinc-400 text-sm">{day.exercise}</p>
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Exercício de Escrita</h3>
+          <p className="opacity-60 text-sm">{day.exercise}</p>
           <textarea 
-            className="w-full bg-zinc-900 border border-white/10 rounded-xl p-4 min-h-[120px] focus:outline-none focus:border-gold-500"
+            className="app-input min-h-[120px]"
             placeholder="Escreva aqui seus pensamentos..."
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
           />
         </section>
 
-        <section className="card-dark p-6 text-center space-y-4 bg-gold-950/20 border-gold-500/20">
-          <h3 className="text-gold-500 font-bold uppercase text-xs tracking-widest">Declaração Profética</h3>
+        <section className="card-dark p-6 text-center space-y-4 bg-gold-950/5 dark:bg-gold-950/20 border-gold-500/20">
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Declaração Profética</h3>
           <p className="text-xl font-serif italic">"{day.declaration}"</p>
         </section>
 
@@ -275,22 +295,48 @@ const DayDetail = ({
 
 const CrisisMode = ({ onBack }: { onBack: () => void }) => {
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
+  const [prayers, setPrayers] = useState<Prayer[]>([]);
+  const [playing, setPlaying] = useState(false);
   const categories = ["Ansiedade", "Medo", "Desânimo", "Ataque Espiritual", "Confusão", "Financeiro", "Família"];
 
-  const prayers: Record<string, Prayer> = {
-    "Ansiedade": {
-      id: 1,
-      category: "Ansiedade",
-      title: "Paz que Excede Entendimento",
-      content: "Senhor, entrego agora todo o peso do meu coração. Minha mente está agitada, mas Tu és o Príncipe da Paz. Eu escolho não andar ansioso por coisa alguma, mas em tudo apresentar meus pedidos a Ti...",
-      declaration: "Minha mente está guardada em Cristo Jesus. Eu descanso n'Ele."
-    },
-    "Medo": {
-      id: 2,
-      category: "Medo",
-      title: "Escudo e Fortaleza",
-      content: "Pai, o medo tenta me paralisar. Mas Tua Palavra diz que não me deste espírito de temor, mas de poder, de amor e de moderação. Eu repreendo todo espírito de medo agora...",
-      declaration: "O Senhor é a minha luz e a minha salvação; de quem terei medo?"
+  useEffect(() => {
+    fetch('/api/prayers')
+      .then(res => res.json())
+      .then(data => setPrayers(data));
+  }, []);
+
+  const getPrayerByCategory = (cat: string) => {
+    return prayers.find(p => p.category === cat) || prayers[0];
+  };
+
+  const playAudio = async (text: string) => {
+    if (playing) return;
+    setPlaying(true);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Leia esta oração de forma calma e inspiradora: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.onended = () => setPlaying(false);
+        audio.play();
+      } else {
+        setPlaying(false);
+      }
+    } catch (err) {
+      console.error("TTS Error:", err);
+      setPlaying(false);
     }
   };
 
@@ -298,7 +344,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-black pb-12"
+      className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4">
         <button onClick={onBack} className="p-2 -ml-2">
@@ -317,15 +363,15 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               exit={{ opacity: 0 }}
               className="grid grid-cols-1 gap-3"
             >
-              <p className="text-zinc-400 mb-2">O que você está enfrentando agora?</p>
+              <p className="opacity-60 mb-2">O que você está enfrentando agora?</p>
               {categories.map(cat => (
                 <button 
                   key={cat}
-                  onClick={() => setSelectedPrayer(prayers[cat] || prayers["Ansiedade"])}
-                  className="card-dark p-5 flex justify-between items-center hover:bg-zinc-800 transition-colors"
+                  onClick={() => setSelectedPrayer(getPrayerByCategory(cat))}
+                  className="card-dark p-5 flex justify-between items-center hover:bg-zinc-800/20 transition-colors"
                 >
                   <span className="text-lg font-medium">{cat}</span>
-                  <ChevronRight className="w-5 h-5 text-zinc-600" />
+                  <ChevronRight className="w-5 h-5 opacity-40" />
                 </button>
               ))}
             </motion.div>
@@ -337,21 +383,30 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="space-y-8"
             >
-              <div className="space-y-2">
-                <span className="text-red-500 font-bold uppercase text-xs tracking-widest">{selectedPrayer.category}</span>
-                <h1 className="text-3xl font-serif italic gold-text">{selectedPrayer.title}</h1>
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <span className="text-red-500 font-bold uppercase text-xs tracking-widest">{selectedPrayer.category}</span>
+                  <h1 className="text-3xl font-serif italic gold-text">{selectedPrayer.title}</h1>
+                </div>
+                <button 
+                  onClick={() => playAudio(selectedPrayer.content)}
+                  disabled={playing}
+                  className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10 disabled:opacity-50"
+                >
+                  {playing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
+                </button>
               </div>
 
-              <div className="space-y-4 text-zinc-300 leading-relaxed text-lg">
+              <div className="space-y-4 opacity-80 leading-relaxed text-lg">
                 {selectedPrayer.content.split('\n').map((p, i) => <p key={i}>{p}</p>)}
               </div>
 
-              <div className="card-dark p-6 text-center space-y-4 bg-red-950/10 border-red-500/20">
+              <div className="card-dark p-6 text-center space-y-4 bg-red-950/5 dark:bg-red-950/10 border-red-500/20">
                 <h3 className="text-red-500 font-bold uppercase text-xs tracking-widest">Declaração de Poder</h3>
                 <p className="text-xl font-serif italic">"{selectedPrayer.declaration}"</p>
               </div>
 
-              <Button variant="outline" className="w-full" onClick={() => setSelectedPrayer(null)}>
+              <Button variant="outline" className="w-full" onClick={() => { setSelectedPrayer(null); setPlaying(false); }}>
                 Escolher outro motivo
               </Button>
             </motion.div>
@@ -362,9 +417,74 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
+const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
+  const [declarations, setDeclarations] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/declarations')
+      .then(res => res.json())
+      .then(data => setDeclarations(data));
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen pb-12"
+    >
+      <header className="p-6 flex items-center gap-4">
+        <button onClick={onBack} className="p-2 -ml-2">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-lg font-medium">Declarações</h2>
+      </header>
+
+      <main className="px-6 space-y-6">
+        <p className="opacity-60">Ative as promessas sobre sua vida.</p>
+        <div className="space-y-4">
+          {declarations.map(decl => (
+            <motion.div 
+              key={decl.id}
+              whileHover={{ scale: 1.02 }}
+              className="card-dark p-6 space-y-3"
+            >
+              <Quote className="w-5 h-5 text-gold-500 opacity-40" />
+              <p className="text-xl font-serif italic leading-relaxed">"{decl.content}"</p>
+              <p className="text-xs uppercase tracking-widest text-gold-600 dark:text-gold-500">{decl.reference}</p>
+            </motion.div>
+          ))}
+        </div>
+      </main>
+    </motion.div>
+  );
+};
+
+const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void }) => {
   const [morning, setMorning] = useState<string[]>([]);
   const [night, setNight] = useState<string[]>([]);
+  const today = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    fetch(`/api/checklists/${userId}/${today}`)
+      .then(res => res.json())
+      .then(data => {
+        setMorning(JSON.parse(data.morning_status));
+        setNight(JSON.parse(data.night_status));
+      });
+  }, [userId, today]);
+
+  const saveChecklist = (newMorning: string[], newNight: string[]) => {
+    fetch('/api/checklists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        date: today,
+        morning_status: newMorning,
+        night_status: newNight
+      })
+    });
+  };
 
   const morningItems = [
     "Agradeci 3 bênçãos",
@@ -381,19 +501,18 @@ const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
     "Pelo que sou grato?"
   ];
 
-  const toggleItem = (item: string, list: string[], setList: (l: string[]) => void) => {
-    if (list.includes(item)) {
-      setList(list.filter(i => i !== item));
-    } else {
-      setList([...list, item]);
-    }
+  const toggleItem = (item: string, list: string[], setList: (l: string[]) => void, isMorning: boolean) => {
+    const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
+    setList(newList);
+    if (isMorning) saveChecklist(newList, night);
+    else saveChecklist(morning, newList);
   };
 
   return (
     <motion.div 
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="min-h-screen bg-black pb-12"
+      className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4">
         <button onClick={onBack} className="p-2 -ml-2">
@@ -404,7 +523,7 @@ const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
 
       <main className="px-6 space-y-8">
         <section className="space-y-4">
-          <div className="flex items-center gap-2 text-gold-400">
+          <div className="flex items-center gap-2 text-gold-500">
             <Sun className="w-5 h-5" />
             <h3 className="font-bold uppercase text-xs tracking-widest">Checklist Matinal</h3>
           </div>
@@ -412,26 +531,26 @@ const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
             {morningItems.map(item => (
               <button 
                 key={item}
-                onClick={() => toggleItem(item, morning, setMorning)}
+                onClick={() => toggleItem(item, morning, setMorning, true)}
                 className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${
                   morning.includes(item) 
-                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
-                    : 'bg-zinc-900 border-white/5 text-zinc-400'
+                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500' 
+                    : 'bg-zinc-900/5 dark:bg-zinc-900 border-zinc-200 dark:border-white/5 opacity-60'
                 }`}
               >
                 <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-                  morning.includes(item) ? 'bg-emerald-500 border-emerald-500' : 'border-white/20'
+                  morning.includes(item) ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-300 dark:border-white/20'
                 }`}>
-                  {morning.includes(item) && <CheckCircle2 className="w-4 h-4 text-black" />}
+                  {morning.includes(item) && <CheckCircle2 className="w-4 h-4 text-white dark:text-black" />}
                 </div>
-                <span>{item}</span>
+                <span className="text-sm font-medium">{item}</span>
               </button>
             ))}
           </div>
         </section>
 
         <section className="space-y-4">
-          <div className="flex items-center gap-2 text-indigo-400">
+          <div className="flex items-center gap-2 text-indigo-500">
             <Moon className="w-5 h-5" />
             <h3 className="font-bold uppercase text-xs tracking-widest">Checklist Noturno</h3>
           </div>
@@ -439,19 +558,19 @@ const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
             {nightItems.map(item => (
               <button 
                 key={item}
-                onClick={() => toggleItem(item, night, setNight)}
+                onClick={() => toggleItem(item, night, setNight, false)}
                 className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${
                   night.includes(item) 
-                    ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' 
-                    : 'bg-zinc-900 border-white/5 text-zinc-400'
+                    ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-500' 
+                    : 'bg-zinc-900/5 dark:bg-zinc-900 border-zinc-200 dark:border-white/5 opacity-60'
                 }`}
               >
                 <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-                  night.includes(item) ? 'bg-indigo-500 border-indigo-500' : 'border-white/20'
+                  night.includes(item) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 dark:border-white/20'
                 }`}>
-                  {night.includes(item) && <CheckCircle2 className="w-4 h-4 text-black" />}
+                  {night.includes(item) && <CheckCircle2 className="w-4 h-4 text-white dark:text-black" />}
                 </div>
-                <span>{item}</span>
+                <span className="text-sm font-medium">{item}</span>
               </button>
             ))}
           </div>
@@ -461,84 +580,116 @@ const ChecklistPage = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const SubscriptionPage = ({ onBack }: { onBack: () => void }) => {
+const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) => {
+  const [gratitude, setGratitude] = useState('');
+  const [learning, setLearning] = useState('');
+  const [saved, setSaved] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    fetch(`/api/diary/${userId}/${today}`)
+      .then(res => res.json())
+      .then(data => {
+        setGratitude(data.gratitude);
+        setLearning(data.learning);
+      });
+  }, [userId, today]);
+
+  const handleSave = () => {
+    fetch('/api/diary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        date: today,
+        gratitude,
+        learning
+      })
+    }).then(() => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-black p-6 flex flex-col">
-      <header className="flex justify-end">
-        <button onClick={onBack} className="p-2 text-zinc-500">Fechar</button>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen pb-12"
+    >
+      <header className="p-6 flex items-center gap-4">
+        <button onClick={onBack} className="p-2 -ml-2">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-lg font-medium">Modo Diário</h2>
       </header>
 
-      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8">
-        <div className="w-20 h-20 rounded-3xl gold-gradient flex items-center justify-center shadow-2xl shadow-gold-500/20">
-          <Lock className="w-10 h-10 text-white" />
+      <main className="px-6 space-y-8">
+        <div className="space-y-4">
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Pelo que você é grato hoje?</h3>
+          <textarea 
+            className="app-input min-h-[120px]"
+            placeholder="Hoje sou grato por..."
+            value={gratitude}
+            onChange={(e) => setGratitude(e.target.value)}
+          />
         </div>
 
-        <div className="space-y-2">
-          <h1 className="text-3xl font-serif italic gold-text">Acesso Premium</h1>
-          <p className="text-zinc-400 max-w-xs mx-auto">Desbloqueie a jornada completa e ative todas as promessas.</p>
+        <div className="space-y-4">
+          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">O que aprendeu com Deus?</h3>
+          <textarea 
+            className="app-input min-h-[120px]"
+            placeholder="Deus me ensinou que..."
+            value={learning}
+            onChange={(e) => setLearning(e.target.value)}
+          />
         </div>
 
-        <div className="w-full space-y-4">
-          <div className="card-dark p-6 border-gold-500/50 bg-gold-500/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-gold-500 text-black text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase">Melhor Valor</div>
-            <div className="flex justify-between items-center">
-              <div className="text-left">
-                <h3 className="font-bold text-lg">Plano Anual</h3>
-                <p className="text-zinc-400 text-sm">Acesso por 12 meses</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">R$ 97,00</div>
-                <div className="text-zinc-500 text-xs">R$ 8,08/mês</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card-dark p-6 hover:border-white/20 transition-colors">
-            <div className="flex justify-between items-center">
-              <div className="text-left">
-                <h3 className="font-bold text-lg">Plano Mensal</h3>
-                <p className="text-zinc-400 text-sm">Cancele quando quiser</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">R$ 14,90</div>
-                <div className="text-zinc-500 text-xs">por mês</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="w-full space-y-4">
-          <ul className="text-left space-y-3 text-sm text-zinc-300">
-            <li className="flex items-center gap-2"><Star className="w-4 h-4 text-gold-500" /> Jornada 30 dias completa</li>
-            <li className="flex items-center gap-2"><Star className="w-4 h-4 text-gold-500" /> Biblioteca de declarações</li>
-            <li className="flex items-center gap-2"><Star className="w-4 h-4 text-gold-500" /> Áudios de oração exclusivos</li>
-            <li className="flex items-center gap-2"><Star className="w-4 h-4 text-gold-500" /> Atualizações futuras</li>
-          </ul>
-        </div>
-
-        <Button variant="gold" className="w-full py-4 text-lg">
-          Assinar Agora
+        <Button variant="gold" className="w-full py-4 flex items-center justify-center gap-2" onClick={handleSave}>
+          {saved ? <CheckCircle2 className="w-5 h-5" /> : 'Salvar no Diário'}
+          {saved ? 'Salvo!' : ''}
         </Button>
-        <p className="text-zinc-600 text-[10px] uppercase tracking-widest">3 dias de teste gratuito incluídos</p>
-      </div>
-    </div>
+
+        {saved && (
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center text-emerald-500 text-sm"
+          >
+            Sua reflexão foi guardada com carinho.
+          </motion.p>
+        )}
+      </main>
+    </motion.div>
   );
 };
 
-// --- Main App ---
-
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'subscription'>('login');
+  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [loading, setLoading] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem('app_theme') as 'light' | 'dark';
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle('light', savedTheme === 'light');
+    }
+
     const savedEmail = localStorage.getItem('user_email');
     if (savedEmail) {
       handleLogin(savedEmail);
     }
   }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('app_theme', newTheme);
+    document.documentElement.classList.toggle('light', newTheme === 'light');
+  };
 
   const handleLogin = async (email: string) => {
     setLoading(true);
@@ -556,12 +707,6 @@ export default function App() {
   };
 
   const startDay = async (dayId: number) => {
-    // Check if day is locked (for free users)
-    if (dayId > 3 && user?.plan === 'free') {
-      setView('subscription');
-      return;
-    }
-
     setLoading(true);
     try {
       const res = await fetch(`/api/days/${dayId}`);
@@ -597,7 +742,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
@@ -608,16 +753,18 @@ export default function App() {
   }
 
   return (
-    <div className="max-w-md mx-auto bg-black min-h-screen shadow-2xl shadow-white/5">
+    <div className="max-w-md mx-auto min-h-screen shadow-2xl shadow-black/20 dark:shadow-white/5">
       <AnimatePresence mode="wait">
-        {view === 'login' && <LoginPage onLogin={handleLogin} />}
+        {view === 'login' && <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />}
         {view === 'home' && user && (
           <HomePage 
             user={user} 
             onStartDay={startDay}
             onOpenCrisis={() => setView('crisis')}
             onOpenChecklist={() => setView('checklist')}
-            onOpenDeclarations={() => setView('subscription')} // Mocking declarations as premium
+            onOpenDeclarations={() => setView('declarations')} 
+            theme={theme}
+            onToggleTheme={toggleTheme}
           />
         )}
         {view === 'day' && currentDay && (
@@ -628,25 +775,32 @@ export default function App() {
           />
         )}
         {view === 'crisis' && <CrisisMode onBack={() => setView('home')} />}
-        {view === 'checklist' && <ChecklistPage onBack={() => setView('home')} />}
-        {view === 'subscription' && <SubscriptionPage onBack={() => setView('home')} />}
+        {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
+        {view === 'checklist' && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
+        {view === 'diary' && <DiaryPage userId={user.id} onBack={() => setView('home')} />}
       </AnimatePresence>
 
       {/* Navigation Bar (only on home) */}
       {view === 'home' && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-zinc-950/80 backdrop-blur-lg border-t border-white/5 px-8 py-4 flex justify-between items-center z-20">
-          <button className="text-gold-500 flex flex-col items-center gap-1">
+        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto nav-blur px-8 py-4 flex justify-between items-center z-20">
+          <button 
+            onClick={() => setView('home')}
+            className={`${view === 'home' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+          >
             <Calendar className="w-6 h-6" />
             <span className="text-[10px] font-bold uppercase">Jornada</span>
           </button>
-          <button onClick={() => setView('subscription')} className="text-zinc-500 flex flex-col items-center gap-1">
-            <Star className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase">Premium</span>
+          <button 
+            onClick={() => setView('diary')}
+            className={`${view === 'diary' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+          >
+            <BookOpen className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase">Diário</span>
           </button>
           <button onClick={() => {
             localStorage.removeItem('user_email');
             setView('login');
-          }} className="text-zinc-500 flex flex-col items-center gap-1">
+          }} className="opacity-40 flex flex-col items-center gap-1">
             <Lock className="w-6 h-6" />
             <span className="text-[10px] font-bold uppercase">Sair</span>
           </button>

@@ -18,8 +18,30 @@
   --color-gold-950: #451a03;
 }
 
+:root {
+  --bg-app: #000000;
+  --text-app: #ffffff;
+  --card-bg: rgba(24, 24, 27, 0.5);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --input-bg: #18181b;
+  --nav-bg: rgba(9, 9, 11, 0.8);
+  --muted-text: #a1a1aa;
+}
+
+:root.light {
+  --bg-app: #f8f9fa;
+  --text-app: #1a1a1a;
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --card-border: rgba(0, 0, 0, 0.05);
+  --input-bg: #ffffff;
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --muted-text: #71717a;
+}
+
 body {
-  @apply bg-black text-white antialiased;
+  background-color: var(--bg-app);
+  color: var(--text-app);
+  @apply antialiased transition-colors duration-300;
   font-family: var(--font-sans);
 }
 
@@ -33,6 +55,19 @@ body {
 }
 
 .card-dark {
-  @apply bg-zinc-900/50 border border-white/10 rounded-2xl backdrop-blur-sm;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  @apply rounded-2xl backdrop-blur-sm transition-colors duration-300;
+}
+
+.app-input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--card-border);
+  @apply w-full rounded-xl px-4 py-4 focus:outline-none focus:border-gold-500 transition-all;
+}
+
+.nav-blur {
+  background-color: var(--nav-bg);
+  @apply backdrop-blur-lg border-t border-white/5 transition-colors duration-300;
 }
 

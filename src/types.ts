@@ -26,6 +26,12 @@ export interface Prayer {
   declaration: string;
 }
 
+export interface Declaration {
+  id: number;
+  content: string;
+  reference: string;
+}
+
 export interface Checklist {
   user_id: number;
   date: string;
