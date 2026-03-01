@@ -14,7 +14,10 @@ import {
   Star,
   BookOpen,
   Volume2,
-  Loader2
+  Loader2,
+  User as UserIcon,
+  Share2,
+  Trophy
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -237,6 +240,38 @@ const DayDetail = ({
   onBack: () => void;
 }) => {
   const [reflection, setReflection] = useState('');
+  const [playing, setPlaying] = useState(false);
+
+  const playAudio = async () => {
+    if (playing) return;
+    setPlaying(true);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Leia esta reflexão devocional com voz inspiradora: ${day.reflection}. O versículo base é ${day.verse}.` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.onended = () => setPlaying(false);
+        audio.play();
+      } else {
+        setPlaying(false);
+      }
+    } catch (err) {
+      console.error("TTS Error:", err);
+      setPlaying(false);
+    }
+  };
 
   return (
     <motion.div 
@@ -244,11 +279,20 @@ const DayDetail = ({
       animate={{ opacity: 1, x: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-transparent backdrop-blur-md z-10">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center justify-between sticky top-0 bg-transparent backdrop-blur-md z-10">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-2 -ml-2">
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h2 className="text-lg font-medium">Dia {day.id}</h2>
+        </div>
+        <button 
+          onClick={playAudio}
+          disabled={playing}
+          className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10 disabled:opacity-50"
+        >
+          {playing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
         </button>
-        <h2 className="text-lg font-medium">Dia {day.id}</h2>
       </header>
 
       <main className="px-6 space-y-8">
@@ -426,6 +470,16 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
       .then(data => setDeclarations(data));
   }, []);
 
+  const handleShare = (decl: any) => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Declaração Profética',
+        text: `"${decl.content}" - ${decl.reference}`,
+        url: window.location.href,
+      });
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -446,13 +500,69 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
             <motion.div 
               key={decl.id}
               whileHover={{ scale: 1.02 }}
-              className="card-dark p-6 space-y-3"
+              className="card-dark p-6 space-y-3 relative group"
             >
+              <button 
+                onClick={() => handleShare(decl)}
+                className="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Share2 className="w-4 h-4 opacity-40" />
+              </button>
               <Quote className="w-5 h-5 text-gold-500 opacity-40" />
               <p className="text-xl font-serif italic leading-relaxed">"{decl.content}"</p>
               <p className="text-xs uppercase tracking-widest text-gold-600 dark:text-gold-500">{decl.reference}</p>
             </motion.div>
           ))}
+        </div>
+      </main>
+    </motion.div>
+  );
+};
+
+const ProfilePage = ({ user, onBack, onLogout }: { user: User; onBack: () => void; onLogout: () => void }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="min-h-screen pb-12"
+    >
+      <header className="p-6 flex items-center gap-4">
+        <button onClick={onBack} className="p-2 -ml-2">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-lg font-medium">Meu Perfil</h2>
+      </header>
+
+      <main className="px-6 space-y-8">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-white text-3xl font-bold">
+            {user.name[0].toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{user.name}</h1>
+            <p className="opacity-50 text-sm">{user.email}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card-dark p-6 text-center space-y-2">
+            <Trophy className="w-6 h-6 mx-auto text-gold-500" />
+            <div className="text-2xl font-bold">{user.progress}</div>
+            <div className="text-[10px] uppercase tracking-widest opacity-50">Dias Concluídos</div>
+          </div>
+          <div className="card-dark p-6 text-center space-y-2">
+            <Flame className="w-6 h-6 mx-auto text-orange-500" />
+            <div className="text-2xl font-bold">{user.streak}</div>
+            <div className="text-[10px] uppercase tracking-widest opacity-50">Dias Seguidos</div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest opacity-40">Configurações</h3>
+          <button onClick={onLogout} className="w-full card-dark p-4 text-left text-red-500 flex items-center gap-3">
+            <Lock className="w-5 h-5" />
+            <span>Sair da Conta</span>
+          </button>
         </div>
       </main>
     </motion.div>
@@ -665,7 +775,7 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
 };
 
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary'>('login');
+  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [loading, setLoading] = useState(false);
@@ -778,6 +888,10 @@ export default function App() {
         {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
         {view === 'checklist' && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
         {view === 'diary' && <DiaryPage userId={user.id} onBack={() => setView('home')} />}
+        {view === 'profile' && <ProfilePage user={user} onBack={() => setView('home')} onLogout={() => {
+          localStorage.removeItem('user_email');
+          setView('login');
+        }} />}
       </AnimatePresence>
 
       {/* Navigation Bar (only on home) */}
@@ -797,12 +911,12 @@ export default function App() {
             <BookOpen className="w-6 h-6" />
             <span className="text-[10px] font-bold uppercase">Diário</span>
           </button>
-          <button onClick={() => {
-            localStorage.removeItem('user_email');
-            setView('login');
-          }} className="opacity-40 flex flex-col items-center gap-1">
-            <Lock className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase">Sair</span>
+          <button 
+            onClick={() => setView('profile')}
+            className={`${view === 'profile' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+          >
+            <UserIcon className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase">Perfil</span>
           </button>
         </nav>
       )}
