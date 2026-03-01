@@ -13,16 +13,11 @@ import {
   Lock,
   Star,
   BookOpen,
-  Volume2,
-  Loader2,
   User as UserIcon,
   Share2,
   Trophy
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
-import { GoogleGenAI, Modality } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // --- Components ---
 
@@ -180,7 +175,9 @@ const HomePage = ({
         <section className="card-dark p-6 space-y-4">
           <div className="flex justify-between items-end">
             <div>
-              <h3 className="text-2xl font-serif italic">Dia {user.progress + 1}</h3>
+              <h3 className="text-2xl font-serif italic">
+                {user.progress >= 30 ? "Jornada Concluída" : `Dia ${user.progress + 1}`}
+              </h3>
               <p className="opacity-60 text-sm">Progresso: {user.progress}/30 dias</p>
             </div>
             <div className="text-gold-500 text-sm font-medium">
@@ -188,14 +185,20 @@ const HomePage = ({
             </div>
           </div>
           <ProgressBar current={user.progress} total={30} />
-          <Button 
-            variant="gold" 
-            className="w-full py-4 flex items-center justify-center gap-2"
-            onClick={() => onStartDay(user.progress + 1)}
-          >
-            Compromisso Diario
-            <ChevronRight className="w-5 h-5" />
-          </Button>
+          {user.progress < 30 ? (
+            <Button 
+              variant="gold" 
+              className="w-full py-4 flex items-center justify-center gap-2"
+              onClick={() => onStartDay(user.progress + 1)}
+            >
+              Compromisso Diario
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          ) : (
+            <div className="p-4 bg-gold-500/10 border border-gold-500/20 rounded-xl text-center">
+              <p className="text-gold-600 dark:text-gold-400 font-medium">Você completou o desafio!</p>
+            </div>
+          )}
         </section>
 
         {/* Quick Access */}
@@ -256,7 +259,6 @@ const DayDetail = ({
   onBack: () => void;
 }) => {
   const [reflection, setReflection] = useState('');
-  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     if (!userId || !day.id) return;
@@ -265,37 +267,6 @@ const DayDetail = ({
       .then(data => setReflection(data?.content || ''))
       .catch(err => console.error(err));
   }, [userId, day.id]);
-
-  const playAudio = async () => {
-    if (playing) return;
-    setPlaying(true);
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Leia esta reflexão devocional com voz inspiradora: ${day.reflection}. O versículo base é ${day.verse}.` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
-        audio.onended = () => setPlaying(false);
-        audio.play();
-      } else {
-        setPlaying(false);
-      }
-    } catch (err) {
-      console.error("TTS Error:", err);
-      setPlaying(false);
-    }
-  };
 
   return (
     <motion.div 
@@ -310,13 +281,6 @@ const DayDetail = ({
           </button>
           <h2 className="text-lg font-medium">Dia {day.id}</h2>
         </div>
-        <button 
-          onClick={playAudio}
-          disabled={playing}
-          className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10 disabled:opacity-50"
-        >
-          {playing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
-        </button>
       </header>
 
       <main className="px-6 space-y-8">
@@ -364,7 +328,6 @@ const DayDetail = ({
 const CrisisMode = ({ onBack }: { onBack: () => void }) => {
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
   const [prayers, setPrayers] = useState<Prayer[]>([]);
-  const [playing, setPlaying] = useState(false);
   const categories = ["Ansiedade", "Medo", "Desânimo", "Ataque Espiritual", "Confusão", "Financeiro", "Família"];
 
   useEffect(() => {
@@ -376,37 +339,6 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
 
   const getPrayerByCategory = (cat: string) => {
     return prayers.find(p => p.category === cat) || prayers[0];
-  };
-
-  const playAudio = async (text: string) => {
-    if (playing) return;
-    setPlaying(true);
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Leia esta oração de forma calma e inspiradora: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
-        audio.onended = () => setPlaying(false);
-        audio.play();
-      } else {
-        setPlaying(false);
-      }
-    } catch (err) {
-      console.error("TTS Error:", err);
-      setPlaying(false);
-    }
   };
 
   return (
@@ -457,13 +389,6 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
                   <span className="text-red-500 font-bold uppercase text-xs tracking-widest">{selectedPrayer.category}</span>
                   <h1 className="text-3xl font-serif italic gold-text">{selectedPrayer.title}</h1>
                 </div>
-                <button 
-                  onClick={() => playAudio(selectedPrayer.content)}
-                  disabled={playing}
-                  className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10 disabled:opacity-50"
-                >
-                  {playing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
-                </button>
               </div>
 
               <div className="space-y-4 opacity-80 leading-relaxed text-lg">
@@ -475,7 +400,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
                 <p className="text-xl font-serif italic">"{selectedPrayer.declaration}"</p>
               </div>
 
-              <Button variant="outline" className="w-full" onClick={() => { setSelectedPrayer(null); setPlaying(false); }}>
+              <Button variant="outline" className="w-full" onClick={() => { setSelectedPrayer(null); }}>
                 Escolher outro motivo
               </Button>
             </motion.div>
@@ -541,6 +466,51 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
           ))}
         </div>
       </main>
+    </motion.div>
+  );
+};
+
+const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-8 bg-gold-950/10 dark:bg-gold-950/20"
+    >
+      <div className="relative">
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
+          transition={{ repeat: Infinity, duration: 4 }}
+          className="w-32 h-32 rounded-full gold-gradient flex items-center justify-center shadow-2xl shadow-gold-500/40"
+        >
+          <Trophy className="w-16 h-16 text-white" />
+        </motion.div>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute -top-4 -right-4"
+        >
+          <Star className="w-8 h-8 text-gold-500 fill-gold-500" />
+        </motion.div>
+      </div>
+
+      <div className="space-y-4">
+        <h1 className="text-4xl font-serif italic gold-text">Parabéns!</h1>
+        <p className="text-xl opacity-80">Você completou os 30 dias da sua jornada espiritual.</p>
+        <p className="opacity-60 leading-relaxed">
+          Sua dedicação e compromisso com o Reino de Deus produziram frutos eternos. 
+          Este é apenas o começo de uma vida transformada pela Palavra.
+        </p>
+      </div>
+
+      <div className="w-full space-y-4">
+        <Button variant="gold" className="w-full py-4" onClick={onBack}>
+          Continuar Navegando
+        </Button>
+        <p className="text-xs uppercase tracking-widest opacity-40">
+          "Combati o bom combate, acabei a carreira, guardei a fé." - 2 Timóteo 4:7
+        </p>
+      </div>
     </motion.div>
   );
 };
@@ -832,7 +802,7 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
 };
 
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile'>('login');
+  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile' | 'congratulations'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [loading, setLoading] = useState(false);
@@ -916,7 +886,11 @@ export default function App() {
       if (!progRes.ok) throw new Error('Failed to update progress');
       
       setUser({ ...user, progress: newProgress, streak: newStreak });
-      setView('home');
+      if (newProgress === 30) {
+        setView('congratulations');
+      } else {
+        setView('home');
+      }
     } catch (err) {
       console.error(err);
     }
@@ -961,6 +935,7 @@ export default function App() {
         {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
         {view === 'checklist' && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
         {view === 'diary' && <DiaryPage userId={user.id} onBack={() => setView('home')} />}
+        {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
         {view === 'profile' && <ProfilePage user={user} onBack={() => setView('home')} onLogout={() => {
           localStorage.removeItem('user_email');
           setView('login');
