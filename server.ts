@@ -62,21 +62,64 @@ db.exec(`
     learning TEXT,
     UNIQUE(user_id, date)
   );
+
+  CREATE TABLE IF NOT EXISTS day_reflections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    day_id INTEGER,
+    content TEXT,
+    UNIQUE(user_id, day_id)
+  );
 `);
 
-// Seed initial data if empty
+// Seed initial data if empty or outdated
 const dayCount = db.prepare("SELECT COUNT(*) as count FROM days").get() as { count: number };
-if (dayCount.count === 0) {
+// Force update to include full verse descriptions
+const firstDay = db.prepare("SELECT verse FROM days WHERE id = 1").get() as { verse: string } | undefined;
+if (dayCount.count !== 30 || (firstDay && !firstDay.verse.includes("-"))) {
+  db.prepare("DELETE FROM days").run();
   const insertDay = db.prepare("INSERT INTO days (id, title, verse, reflection, application, exercise, declaration) VALUES (?, ?, ?, ?, ?, ?, ?)");
   
-  insertDay.run(1, "O Despertar da Identidade", "Gênesis 1:27", "Você foi criado à imagem e semelhança de Deus. Sua identidade não vem do que você faz, mas de quem você é n'Ele.", "Passe 5 minutos em silêncio hoje apenas ouvindo o que Deus diz sobre você.", "Escreva três mentiras que você acreditava sobre si mesmo e substitua-as por verdades bíblicas.", "Eu sou obra-prima de Deus, criado para grandes coisas.");
-  insertDay.run(2, "A Força da Gratidão", "1 Tessalonicenses 5:18", "A gratidão abre portas para o sobrenatural. Quando agradecemos, mudamos nossa perspectiva do problema para o Provedor.", "Liste 10 coisas pelas quais você é grato hoje, mesmo as pequenas.", "Ligue para alguém hoje apenas para agradecer por algo que essa pessoa fez por você.", "Meu coração transborda gratidão e minha boca proclama as bondades do Senhor.");
-  insertDay.run(3, "Vencendo o Medo", "Josué 1:9", "O medo é um ladrão de destinos. A coragem não é a ausência de medo, mas a presença de Deus que nos impulsiona.", "Identifique um passo que você tem evitado por medo e dê esse passo hoje.", "Escreva o seu maior medo e coloque o versículo de Josué 1:9 por cima dele.", "O Senhor é comigo, por isso não temerei mal algum. Sou corajoso e forte.");
-  insertDay.run(4, "O Poder da Palavra", "Provérbios 18:21", "Suas palavras têm poder de vida e morte. O que você declara sobre sua vida hoje determina o seu amanhã.", "Passe o dia sem reclamar de absolutamente nada. Substitua cada queixa por um louvor.", "Escreva 5 declarações positivas sobre sua família e saúde.", "Minhas palavras são sementes de vida e prosperidade.");
-  insertDay.run(5, "A Disciplina da Oração", "Mateus 6:6", "Oração não é um monólogo, é um diálogo. É no secreto que as maiores vitórias são forjadas.", "Dedique 15 minutos extras hoje apenas para conversar com Deus como um amigo.", "Escreva um pedido de oração que parece impossível e entregue-o a Deus.", "O meu Pai me ouve no secreto e me recompensa publicamente.");
-  insertDay.run(6, "Fé em Meio à Tempestade", "Marcos 4:39", "Jesus acalma a tempestade com uma palavra. A sua fé é o que te mantém firme quando o mar está agitado.", "Escolha confiar em Deus hoje mesmo que as circunstâncias pareçam contrárias.", "Desenhe um barco em meio a ondas e escreva 'Jesus está no barco'.", "A paz de Deus governa o meu coração e acalma as tempestades ao meu redor.");
-  insertDay.run(7, "O Chamado para Servir", "Gálatas 5:13", "Fomos libertos para servir uns aos outros em amor. O serviço é a maior expressão de maturidade espiritual.", "Faça algo por alguém hoje sem esperar nada em troca.", "Liste três pessoas que você pode abençoar esta semana.", "Eu nasci para servir e ser um canal das bênçãos de Deus.");
+  const daysData = [
+    [1, "Transformado Pela Renovação", "Romanos 12:2 - E não vos conformeis com este mundo, mas transformai-vos pela renovação do vosso entendimento, para que experimenteis qual seja a boa, agradável e perfeita vontade de Deus.", "A transformação começa na mente. Deus muda pensamentos antes de mudar circunstâncias. Se sua mentalidade muda, sua vida muda.", "Identifique um pensamento negativo recorrente. Substitua por uma verdade bíblica.", "Hoje preciso renovar minha mente na área de:", "Minha mente está sendo renovada pela Palavra. Eu viverei a vontade perfeita de Deus."],
+    [2, "Nada Me Faltará", "Salmos 23:1 - O Senhor é o meu pastor; nada me faltará.", "Deus não é apenas Salvador, Ele é Pastor diário. Quando Ele guia, não há falta — há direção.", "Entregue hoje uma preocupação específica a Deus. Evite reclamar sobre isso.", "Estou entregando ao Senhor:", "O Senhor é meu Pastor. Eu descanso na Sua direção."],
+    [3, "Entregando o Controle", "Provérbios 3:5 - Confia no Senhor de todo o teu coração e não te estribes no teu próprio entendimento.", "Confiar é abrir mão do controle. Fé começa onde o entendimento termina.", "Ore antes de decidir qualquer coisa hoje. Evite agir por impulso emocional.", "Preciso confiar em Deus na área de:", "Eu confio totalmente no Senhor."],
+    [4, "Não Temas", "Isaías 41:10 - Não temas, porque eu sou contigo; não te assombres, porque eu sou o teu Deus; eu te fortaleço, e te ajudo, e te sustento com a minha destra fiel.", "Deus não apenas manda você não temer — Ele promete presença. A coragem nasce da certeza de quem está ao seu lado.", "Liste três medos atuais. Ore entregando cada um a Deus.", "Meu maior medo hoje é:", "Deus está comigo. O medo não governa minha vida."],
+    [5, "Vivendo Como Filho", "Romanos 8:1 - Portanto, agora nenhuma condenação há para os que estão em Cristo Jesus, que não andam segundo a carne, mas segundo o Espírito.", "A culpa paralisa. A graça libera. Você não vive mais sob acusação — vive sob adoção.", "Pare de se acusar por algo do passado. Receba o perdão de Deus.", "Preciso me libertar da culpa sobre:", "Sou livre da condenação. Sou filho amado de Deus."],
+    [6, "Confiança que Produz Descanso", "Salmos 37:5 - Entrega o teu caminho ao Senhor; confia nele, e ele tudo fará.", "Entregar é parar de tentar controlar. Quando você descansa, Deus age.", "Entregue um plano específico a Deus hoje.", "Estou entregando ao Senhor:", "Eu entrego meu caminho ao Senhor e descanso."],
+    [7, "Paz na Ansiedade", "Filipenses 4:6 - Não estejais inquietos por coisa alguma; antes as vossas petições sejam em tudo conhecidas diante de Deus pela oração e súplica, com ação de graças.", "Ansiedade diminui quando oração aumenta.", "Troque preocupação por oração imediata.", "Minha preocupação hoje é:", "A paz de Deus guarda minha mente."],
+    [8, "Identidade Eterna", "Efésios 1:4 - Como também nos elegeu nele antes da fundação do mundo, para que fôssemos santos e irrepreensíveis diante dele em amor.", "Fui escolhido antes da fundação do mundo para ser santo e irrepreensível diante dele em amor.", "Reflita sobre o fato de que Deus te escolheu pessoalmente.", "O que significa para você ser escolhido por Deus?", "Fui escolhido antes da fundação do mundo."],
+    [9, "Salvo Pela Graça", "Efésios 2:8 - Porque pela graça sois salvos, por meio da fé; e isto não vem de vós, é dom de Deus.", "Agradeça a Deus pelo presente gratuito da salvação.", "Como a graça de Deus mudou sua perspectiva hoje?", "Sou salvo pela graça."],
+    [10, "Futuro Seguro", "Jeremias 29:11 - Porque eu bem sei os pensamentos que tenho a vosso respeito, diz o Senhor; pensamentos de paz, e não de mal, para vos dar o fim que esperais.", "Confie que os planos de Deus para você são bons.", "Qual área do seu futuro você entrega a Deus hoje?", "Meu futuro está nas mãos de Deus."],
+    [11, "Sacerdócio Real", "1 Pedro 2:9 - Mas vós sois a geração eleita, o sacerdócio real, a nação santa, o povo adquirido, para que anuncieis as virtudes daquele que vos chamou das trevas para a sua maravilhosa luz.", "Lembre-se da sua posição real em Cristo.", "Como você pode agir como um representante de Deus hoje?", "Sou geração escolhida."],
+    [12, "Sabedoria do Alto", "Tiago 1:5 - E, se algum de vós tem falta de sabedoria, peça-a a Deus, que a todos dá liberalmente, e o não lança em rosto, e ser-lhe-á dada.", "Peça sabedoria para um desafio específico que você enfrenta.", "Em qual situação você precisa da sabedoria de Deus agora?", "Deus me concede sabedoria."],
+    [13, "Nova Criatura", "2 Coríntios 5:17 - Assim que, se alguém está em Cristo, nova criatura é; as coisas velhas já passaram; eis que tudo se fez novo.", "Deixe o passado para trás e abrace o novo de Deus.", "Qual 'coisa velha' você decide abandonar hoje?", "Sou nova criação."],
+    [14, "Prioridade Espiritual", "Mateus 6:33 - Mas, buscai primeiro o reino de Deus, e a sua justiça, e todas estas coisas vos serão acrescentadas.", "Coloque Deus em primeiro lugar em sua agenda de hoje.", "Como você buscou o Reino em primeiro lugar hoje?", "Busco primeiro o Reino."],
+    [15, "Vida Pela Fé", "Hebreus 11:1 - Ora, a fé é o firme fundamento das coisas que se esperam, e a prova das coisas que se não veem.", "Aja com base no que Deus prometeu, não no que você vê.", "Qual passo de fé você deu hoje?", "Vivo pela fé."],
+    [16, "Oração com Fé", "Marcos 11:24 - Portanto, vos digo que tudo o que pedirdes, orando, crede que o recebereis, e tê-lo-eis.", "Ore por algo específico acreditando que Deus ouve e responde.", "Pelo que você orou com fé hoje?", "Oro crendo."],
+    [17, "Fé em Ação", "Tiago 2:26 - Porque, assim como o corpo sem o espírito está morto, assim também a fé sem obras é morta.", "Demonstre sua fé através de uma ação concreta.", "Qual ação acompanhou sua fé hoje?", "Minha fé produz obras."],
+    [18, "Armadura Espiritual", "Efésios 6:11 - Revesti-vos de toda a armadura de Deus, para que possais estar firmes contra as astutas ciladas do diabo.", "Declare cada peça da armadura sobre sua vida hoje.", "Qual parte da armadura você mais precisou hoje?", "Estou revestido da armadura de Deus."],
+    [19, "Autoridade Espiritual", "Lucas 10:19 - Eis que vos dou poder para pisar serpentes e escorpiões, e toda a força do inimigo, e nada vos fará dano algum.", "Exerça sua autoridade em Cristo sobre as circunstâncias.", "Em qual área você exerceu autoridade hoje?", "Tenho autoridade em Cristo."],
+    [20, "Poder do Espírito", "Atos 1:8 - Mas recebereis a virtude do Espírito Santo, que há de vir sobre vós; e ser-me-eis testemunhas, tanto em Jerusalém como em toda a Judeia e Samaria, e até aos confins da terra.", "Peça ao Espírito Santo que te capacite para testemunhar.", "Como o poder do Espírito se manifestou em você hoje?", "Recebo poder do Espírito Santo."],
+    [21, "Amor Verdadeiro", "1 Coríntios 13:7 - Tudo sofre, tudo crê, tudo espera, tudo suporta.", "Pratique o amor paciente e bondoso com alguém difícil.", "Quem você escolheu amar hoje?", "Escolho amar."],
+    [22, "Mente no Alto", "Colossenses 3:2 - Pensai nas coisas que são de cima, e não nas que são da terra.", "Desvie o foco dos problemas terrenos para a realidade celestial.", "Quais pensamentos do alto ocuparam sua mente hoje?", "Minha mente está nas coisas do alto."],
+    [23, "Obra Completa", "Filipenses 1:6 - Tendo por certo isto mesmo, que aquele que em vós começou a boa obra a aperfeiçoará até ao dia de Jesus Cristo.", "Descanse na certeza de que Deus não deixa nada inacabado.", "Em que área você vê Deus trabalhando em você?", "Deus completará a obra."],
+    [24, "Disciplina Espiritual", "1 Timóteo 4:7 - Mas rejeita as fábulas profanas e de velhas, e exercita-te a ti mesmo em piedade.", "Dedique tempo à leitura da Bíblia e oração como um exercício.", "Como foi seu exercício de fé hoje?", "Me exercito na fé."],
+    [25, "Perseverança", "Mateus 24:13 - Mas aquele que perseverar até ao fim será salvo.", "Não desista, mesmo quando o caminho parecer difícil.", "O que te motivou a perseverar hoje?", "Persevero até o fim."],
+    [26, "Paz Verdadeira", "João 14:27 - Deixo-vos a paz, a minha paz vos dou; não vo-la dou como o mundo a dá. Não se turbe o vosso coração, nem se atemorize.", "Receba a paz que Jesus oferece, que é independente das circunstâncias.", "Como você experimentou a paz de Cristo hoje?", "A paz de Cristo governa minha vida."],
+    [27, "Permanecer em Cristo", "João 15:5 - Eu sou a videira, vós as varas; quem está em mim, e eu nele, esse dá muito fruto; porque sem mim nada podeis fazer.", "Mantenha sua conexão com Jesus através da oração constante.", "Como você permaneceu conectado a Jesus hoje?", "Permaneço em Cristo."],
+    [28, "Deus é Amor", "1 João 4:8 - Aquele que não ama não conhece a Deus; porque Deus é amor.", "Reflita sobre a natureza amorosa de Deus.", "Como você sentiu o amor de Deus hoje?", "Vivo no amor de Deus."],
+    [29, "Todas as Coisas Novas", "Apocalipse 21:5 - E o que estava assentado sobre o trono disse: Eis que faço novas todas as coisas. E disse-me: Escreve; porque estas palavras são verdadeiras e fiéis.", "Acredite que Deus pode restaurar qualquer situação.", "O que Deus está renovando em sua vida agora?", "Deus faz novas todas as coisas."],
+    [30, "A Obra Concluída", "Filipenses 1:6 - Tendo por certo isto mesmo, que aquele que em vós começou a boa obra a aperfeiçoará até ao dia de Jesus Cristo.", "Celebre a jornada e a fidelidade de Deus.", "Qual a maior lição desses 30 dias?", "Deus concluirá tudo o que começou em mim."]
+  ];
 
+  daysData.forEach(day => {
+    insertDay.run(day[0], day[1], day[2], day[3], day[4], day[5], day[6]);
+  });
+}
+
+const prayerCount = db.prepare("SELECT COUNT(*) as count FROM prayers").get() as { count: number };
+if (prayerCount.count === 0) {
   // Seed Crisis Prayers
   const insertPrayer = db.prepare("INSERT INTO prayers (category, title, content, declaration) VALUES (?, ?, ?, ?)");
   insertPrayer.run("Ansiedade", "Paz que Excede Entendimento", "Senhor, entrego agora todo o peso do meu coração. Minha mente está agitada, mas Tu é o Príncipe da Paz. Eu escolho não andar ansioso por coisa alguma, mas em tudo apresentar meus pedidos a Ti com ações de graças.", "Minha mente está guardada em Cristo Jesus. Eu descanso n'Ele.");
@@ -84,92 +127,202 @@ if (dayCount.count === 0) {
   insertPrayer.run("Desânimo", "Renovação de Forças", "Senhor, sinto minhas forças se esgotando. Mas Tu prometeste que aqueles que esperam no Senhor renovarão suas forças. Voarão como águias. Correrão e não se cansarão.", "O Senhor é a força da minha vida. Eu me levanto em vitória.");
   insertPrayer.run("Financeiro", "O Senhor é meu Pastor", "Pai, as contas batem à porta, mas eu sei que Tu és o meu Provedor. Abro mão de toda preocupação e confio que suprirás cada uma das minhas necessidades segundo as Tuas riquezas em glória.", "O Senhor é meu pastor e nada me faltará.");
   insertPrayer.run("Família", "Casa Edificada na Rocha", "Senhor, consagro minha família a Ti. Que nossa casa seja um lugar de paz, perdão e alegria. Protege nossos relacionamentos de toda discórdia e maldade.", "Eu e minha casa serviremos ao Senhor.");
+}
 
-  // Seed Declarations
-  const insertDecl = db.prepare("INSERT INTO declarations (content, reference) VALUES (?, ?)");
-  insertDecl.run("Eu sou amado por Deus incondicionalmente.", "Jeremias 31:3");
-  insertDecl.run("Tudo posso naquele que me fortalece.", "Filipenses 4:13");
-  insertDecl.run("O Senhor é o meu pastor e nada me faltará.", "Salmos 23:1");
-  insertDecl.run("Sou mais que vencedor em Cristo Jesus.", "Romanos 8:37");
-  insertDecl.run("A alegria do Senhor é a minha força.", "Neemias 8:10");
+const declCount = db.prepare("SELECT COUNT(*) as count FROM declarations").get() as { count: number };
+if (declCount.count !== 21) {
+  // Clear old declarations and seed new ones
+  db.prepare("DELETE FROM declarations").run();
+  
+  const insertDecl = db.prepare("INSERT INTO declarations (id, content, reference) VALUES (?, ?, ?)");
+  const declarations = [
+    ["Sou filho amado de Deus, aceito completamente em Cristo Jesus. Minha identidade não depende de desempenho, mas da obra consumada de Jesus.", "1 João 3:1"],
+    ["Sou nova criatura em Cristo. As coisas velhas já passaram; tudo se fez novo.", "2 Coríntios 5:17"],
+    ["Fui criado com propósito intencional por Deus. Sou obra-prima divina, criado para boas obras.", "Efésios 2:10"],
+    ["Sou justificado pela fé em Cristo. Não há condenação para mim. Tenho paz com Deus.", "Romanos 5:1"],
+    ["Sou templo do Espírito Santo. Deus habita em mim pelo Seu Espírito.", "1 Coríntios 6:19"],
+    ["Fui escolhido antes da fundação do mundo para ser santo e irrepreensível diante de Deus.", "Efésios 1:4"],
+    ["Sou mais que vencedor por meio daquele que me amou. Nada pode me separar do amor de Cristo.", "Romanos 8:37-39"],
+    ["Deus suprirá todas as minhas necessidades segundo Suas riquezas em glória.", "Filipenses 4:19"],
+    ["Nenhuma arma forjada contra mim prosperará.", "Isaías 54:17"],
+    ["O Senhor é meu pastor; nada me faltará. Ele restaura minha alma e me guia.", "Salmos 23:1"],
+    ["Toda graça abundará sobre mim, e terei o suficiente para toda boa obra.", "2 Coríntios 9:8"],
+    ["Os anjos do Senhor acampam ao meu redor e me livram.", "Salmos 34:7"],
+    ["O sangue de Jesus me purifica e tenho livre acesso ao trono da graça.", "Hebreus 4:16"],
+    ["Maior é aquele que está em mim do que aquele que está no mundo.", "1 João 4:4"],
+    ["Lanço toda minha ansiedade sobre Deus, porque Ele cuida de mim.", "1 Pedro 5:7"],
+    ["Tudo posso naquele que me fortalece.", "Filipenses 4:13"],
+    ["Deus tem planos de paz para mim, para me dar futuro e esperança.", "Jeremias 29:11"],
+    ["A fé é o firme fundamento das coisas que espero.", "Hebreus 11:1"],
+    ["Deus está fazendo uma coisa nova em minha vida.", "Isaías 43:19"],
+    ["Porque eu creio, falarei. Minha boca declara a fidelidade do Senhor.", "2 Coríntios 4:13"],
+    ["O que Deus começou em mim, Ele completará.", "Filipenses 1:6"]
+  ];
+
+  declarations.forEach((d, i) => {
+    insertDecl.run(i + 1, d[0], d[1]);
+  });
 }
 
 async function startServer() {
   const app = express();
   app.use(express.json());
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // API Routes
   app.get("/api/days", (req, res) => {
-    const days = db.prepare("SELECT * FROM days").all();
-    res.json(days);
+    try {
+      const days = db.prepare("SELECT * FROM days").all();
+      res.json(days || []);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch days" });
+    }
   });
 
   app.get("/api/days/:id", (req, res) => {
-    const day = db.prepare("SELECT * FROM days WHERE id = ?").get(req.params.id);
-    res.json(day);
+    try {
+      const day = db.prepare("SELECT * FROM days WHERE id = ?").get(req.params.id);
+      res.json(day || null);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch day" });
+    }
   });
 
   app.get("/api/prayers", (req, res) => {
-    const prayers = db.prepare("SELECT * FROM prayers").all();
-    res.json(prayers);
+    try {
+      const prayers = db.prepare("SELECT * FROM prayers").all();
+      res.json(prayers || []);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch prayers" });
+    }
   });
 
   app.get("/api/declarations", (req, res) => {
-    const declarations = db.prepare("SELECT * FROM declarations").all();
-    res.json(declarations);
+    try {
+      const declarations = db.prepare("SELECT * FROM declarations").all();
+      res.json(declarations || []);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch declarations" });
+    }
   });
 
   app.get("/api/user/:email", (req, res) => {
-    let user = db.prepare("SELECT * FROM users WHERE email = ?").get(req.params.email);
-    if (!user) {
-      db.prepare("INSERT INTO users (email, name) VALUES (?, ?)").run(req.params.email, req.params.email.split('@')[0]);
-      user = db.prepare("SELECT * FROM users WHERE email = ?").get(req.params.email);
+    try {
+      const email = req.params.email;
+      let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      if (!user) {
+        db.prepare("INSERT INTO users (email, name) VALUES (?, ?)").run(email, email.split('@')[0]);
+        user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      }
+      res.json(user || null);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch/create user" });
     }
-    res.json(user);
   });
 
   app.post("/api/user/progress", (req, res) => {
-    const { email, progress, streak } = req.body;
-    db.prepare("UPDATE users SET progress = ?, streak = ?, last_access = ? WHERE email = ?")
-      .run(progress, streak, new Date().toISOString(), email);
-    res.json({ success: true });
+    try {
+      const { email, progress, streak } = req.body;
+      db.prepare("UPDATE users SET progress = ?, streak = ?, last_access = ? WHERE email = ?")
+        .run(progress, streak, new Date().toISOString(), email);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to update progress" });
+    }
   });
 
   app.get("/api/checklists/:userId/:date", (req, res) => {
-    const checklist = db.prepare("SELECT * FROM checklists WHERE user_id = ? AND date = ?")
-      .get(req.params.userId, req.params.date);
-    res.json(checklist || { morning_status: "[]", night_status: "[]" });
+    try {
+      const checklist = db.prepare("SELECT * FROM checklists WHERE user_id = ? AND date = ?")
+        .get(req.params.userId, req.params.date);
+      res.json(checklist || { morning_status: "[]", night_status: "[]" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch checklist" });
+    }
   });
 
   app.post("/api/checklists", (req, res) => {
-    const { user_id, date, morning_status, night_status } = req.body;
-    db.prepare(`
-      INSERT INTO checklists (user_id, date, morning_status, night_status)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, date) DO UPDATE SET
-      morning_status = excluded.morning_status,
-      night_status = excluded.night_status
-    `).run(user_id, date, JSON.stringify(morning_status), JSON.stringify(night_status));
-    res.json({ success: true });
+    try {
+      const { user_id, date, morning_status, night_status } = req.body;
+      db.prepare(`
+        INSERT INTO checklists (user_id, date, morning_status, night_status)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, date) DO UPDATE SET
+        morning_status = excluded.morning_status,
+        night_status = excluded.night_status
+      `).run(user_id, date, JSON.stringify(morning_status), JSON.stringify(night_status));
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to save checklist" });
+    }
   });
 
   app.get("/api/diary/:userId/:date", (req, res) => {
-    const entry = db.prepare("SELECT * FROM diary WHERE user_id = ? AND date = ?")
-      .get(req.params.userId, req.params.date);
-    res.json(entry || { gratitude: "", learning: "" });
+    try {
+      const entry = db.prepare("SELECT * FROM diary WHERE user_id = ? AND date = ?")
+        .get(req.params.userId, req.params.date);
+      res.json(entry || { gratitude: "", learning: "" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch diary entry" });
+    }
   });
 
   app.post("/api/diary", (req, res) => {
-    const { user_id, date, gratitude, learning } = req.body;
-    db.prepare(`
-      INSERT INTO diary (user_id, date, gratitude, learning)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, date) DO UPDATE SET
-      gratitude = excluded.gratitude,
-      learning = excluded.learning
-    `).run(user_id, date, gratitude, learning);
-    res.json({ success: true });
+    try {
+      const { user_id, date, gratitude, learning } = req.body;
+      db.prepare(`
+        INSERT INTO diary (user_id, date, gratitude, learning)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, date) DO UPDATE SET
+        gratitude = excluded.gratitude,
+        learning = excluded.learning
+      `).run(user_id, date, gratitude, learning);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to save diary entry" });
+    }
+  });
+
+  app.get("/api/reflections/:userId/:dayId", (req, res) => {
+    try {
+      const reflection = db.prepare("SELECT * FROM day_reflections WHERE user_id = ? AND day_id = ?")
+        .get(req.params.userId, req.params.dayId);
+      res.json(reflection || { content: "" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch reflection" });
+    }
+  });
+
+  app.post("/api/reflections", (req, res) => {
+    try {
+      const { user_id, day_id, content } = req.body;
+      db.prepare(`
+        INSERT INTO day_reflections (user_id, day_id, content)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, day_id) DO UPDATE SET
+        content = excluded.content
+      `).run(user_id, day_id, content);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to save reflection" });
+    }
+  });
+
+  // API 404 handler
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ error: "API route not found" });
   });
 
   // Vite middleware for development
@@ -186,8 +339,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Flame, 
   Calendar, 
-  ShieldAlert, 
+  Heart, 
   Quote, 
   CheckCircle2, 
   ChevronRight, 
@@ -145,6 +145,18 @@ const HomePage = ({
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }) => {
+  const [dailyDeclaration, setDailyDeclaration] = useState<Declaration | null>(null);
+
+  useEffect(() => {
+    fetch('/api/declarations')
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load declarations'))
+      .then(data => {
+        const currentDayDecl = data.find((d: any) => d.id === (user.progress + 1)) || data[0];
+        setDailyDeclaration(currentDayDecl);
+      })
+      .catch(err => console.error(err));
+  }, [user.progress]);
+
   return (
     <div className="min-h-screen pb-24">
       <header className="p-6 flex justify-between items-center">
@@ -153,7 +165,7 @@ const HomePage = ({
           <h2 className="text-xl font-medium">{user.name}</h2>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={onToggleTheme} className="p-2 rounded-full border border-zinc-200 dark:border-white/10">
+          <button onClick={onToggleTheme} className="p-3 rounded-full border border-zinc-200 dark:border-white/10">
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
           <div className="flex items-center gap-2 bg-zinc-900/10 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/5">
@@ -181,7 +193,7 @@ const HomePage = ({
             className="w-full py-4 flex items-center justify-center gap-2"
             onClick={() => onStartDay(user.progress + 1)}
           >
-            Começar meus 10 minutos
+            Compromisso Diario
             <ChevronRight className="w-5 h-5" />
           </Button>
         </section>
@@ -193,9 +205,9 @@ const HomePage = ({
             className="card-dark p-4 flex flex-col items-center gap-3 hover:bg-zinc-800/50 transition-colors"
           >
             <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-              <ShieldAlert className="w-6 h-6 text-red-500" />
+              <Heart className="w-6 h-6 text-red-500" />
             </div>
-            <span className="font-medium">Modo Crise</span>
+            <span className="font-medium">Orações</span>
           </button>
           <button 
             onClick={onOpenDeclarations}
@@ -204,7 +216,7 @@ const HomePage = ({
             <div className="w-12 h-12 rounded-full bg-gold-500/10 flex items-center justify-center">
               <Quote className="w-6 h-6 text-gold-500" />
             </div>
-            <span className="font-medium">Declarações</span>
+            <span className="font-medium">Declarações Proféticas</span>
           </button>
           <button 
             onClick={onOpenChecklist}
@@ -218,13 +230,15 @@ const HomePage = ({
         </section>
 
         {/* Daily Verse */}
-        <section className="text-center py-8 space-y-4 opacity-60">
-          <Quote className="w-8 h-8 mx-auto text-gold-500/40" />
-          <p className="text-lg font-serif italic leading-relaxed">
-            "Lâmpada para os meus pés é tua palavra e luz, para o meu caminho."
-          </p>
-          <p className="text-sm uppercase tracking-widest">Salmos 119:105</p>
-        </section>
+        {dailyDeclaration && (
+          <section className="text-center py-8 space-y-4 opacity-60">
+            <Quote className="w-8 h-8 mx-auto text-gold-500/40" />
+            <p className="text-lg font-serif italic leading-relaxed">
+              "{dailyDeclaration.content}"
+            </p>
+            <p className="text-sm uppercase tracking-widest">{dailyDeclaration.reference}</p>
+          </section>
+        )}
       </main>
     </div>
   );
@@ -232,15 +246,25 @@ const HomePage = ({
 
 const DayDetail = ({ 
   day, 
+  userId,
   onComplete, 
   onBack 
 }: { 
   day: Day; 
-  onComplete: () => void; 
+  userId: number;
+  onComplete: (reflection: string) => void; 
   onBack: () => void;
 }) => {
   const [reflection, setReflection] = useState('');
   const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!userId || !day.id) return;
+    fetch(`/api/reflections/${encodeURIComponent(userId)}/${encodeURIComponent(day.id)}`)
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load reflection'))
+      .then(data => setReflection(data?.content || ''))
+      .catch(err => console.error(err));
+  }, [userId, day.id]);
 
   const playAudio = async () => {
     if (playing) return;
@@ -329,7 +353,7 @@ const DayDetail = ({
           <p className="text-xl font-serif italic">"{day.declaration}"</p>
         </section>
 
-        <Button variant="gold" className="w-full py-4" onClick={onComplete}>
+        <Button variant="gold" className="w-full py-4" onClick={() => onComplete(reflection)}>
           Concluir Dia {day.id}
         </Button>
       </main>
@@ -345,8 +369,9 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
 
   useEffect(() => {
     fetch('/api/prayers')
-      .then(res => res.json())
-      .then(data => setPrayers(data));
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load prayers'))
+      .then(data => setPrayers(data || []))
+      .catch(err => console.error(err));
   }, []);
 
   const getPrayerByCategory = (cat: string) => {
@@ -394,7 +419,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
         <button onClick={onBack} className="p-2 -ml-2">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Modo Crise</h2>
+        <h2 className="text-lg font-medium">Orações</h2>
       </header>
 
       <main className="px-6 space-y-6">
@@ -466,8 +491,9 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
 
   useEffect(() => {
     fetch('/api/declarations')
-      .then(res => res.json())
-      .then(data => setDeclarations(data));
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load declarations'))
+      .then(data => setDeclarations(data || []))
+      .catch(err => console.error(err));
   }, []);
 
   const handleShare = (decl: any) => {
@@ -490,7 +516,7 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
         <button onClick={onBack} className="p-2 -ml-2">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Declarações</h2>
+        <h2 className="text-lg font-medium">Declarações Proféticas</h2>
       </header>
 
       <main className="px-6 space-y-6">
@@ -575,12 +601,16 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    fetch(`/api/checklists/${userId}/${today}`)
-      .then(res => res.json())
+    if (!userId || !today) return;
+    fetch(`/api/checklists/${encodeURIComponent(userId)}/${encodeURIComponent(today)}`)
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load checklist'))
       .then(data => {
-        setMorning(JSON.parse(data.morning_status));
-        setNight(JSON.parse(data.night_status));
-      });
+        if (data) {
+          setMorning(JSON.parse(data.morning_status || "[]"));
+          setNight(JSON.parse(data.night_status || "[]"));
+        }
+      })
+      .catch(err => console.error(err));
   }, [userId, today]);
 
   const saveChecklist = (newMorning: string[], newNight: string[]) => {
@@ -593,7 +623,9 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
         morning_status: newMorning,
         night_status: newNight
       })
-    });
+    }).then(res => {
+      if (!res.ok) console.error('Failed to save checklist');
+    }).catch(err => console.error(err));
   };
 
   const morningItems = [
@@ -614,6 +646,23 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
   const toggleItem = (item: string, list: string[], setList: (l: string[]) => void, isMorning: boolean) => {
     const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
     setList(newList);
+    
+    // Check if all items are completed
+    const allMorningCompleted = isMorning ? newList.length === morningItems.length : morning.length === morningItems.length;
+    const allNightCompleted = !isMorning ? newList.length === nightItems.length : night.length === nightItems.length;
+
+    if (allMorningCompleted && allNightCompleted) {
+      // Automatic reset logic if desired, or just show a message.
+      // The user said "reset when completed".
+      setTimeout(() => {
+        if (confirm("Parabéns! Você completou todos os checklists de hoje. Deseja reiniciar para amanhã?")) {
+          setMorning([]);
+          setNight([]);
+          saveChecklist([], []);
+        }
+      }, 500);
+    }
+
     if (isMorning) saveChecklist(newList, night);
     else saveChecklist(morning, newList);
   };
@@ -697,12 +746,16 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    fetch(`/api/diary/${userId}/${today}`)
-      .then(res => res.json())
+    if (!userId || !today) return;
+    fetch(`/api/diary/${encodeURIComponent(userId)}/${encodeURIComponent(today)}`)
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load diary'))
       .then(data => {
-        setGratitude(data.gratitude);
-        setLearning(data.learning);
-      });
+        if (data) {
+          setGratitude(data.gratitude || '');
+          setLearning(data.learning || '');
+        }
+      })
+      .catch(err => console.error(err));
   }, [userId, today]);
 
   const handleSave = () => {
@@ -715,10 +768,14 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
         gratitude,
         learning
       })
-    }).then(() => {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    });
+    }).then(res => {
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        console.error('Failed to save diary');
+      }
+    }).catch(err => console.error(err));
   };
 
   return (
@@ -802,15 +859,18 @@ export default function App() {
   };
 
   const handleLogin = async (email: string) => {
+    if (!email) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/user/${email}`);
+      const res = await fetch(`/api/user/${encodeURIComponent(email)}`);
+      if (!res.ok) throw new Error('Login failed');
       const userData = await res.json();
       setUser(userData);
       localStorage.setItem('user_email', email);
       setView('home');
     } catch (err) {
       console.error(err);
+      alert("Erro ao entrar. Verifique sua conexão.");
     } finally {
       setLoading(false);
     }
@@ -819,29 +879,41 @@ export default function App() {
   const startDay = async (dayId: number) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/days/${dayId}`);
+      const res = await fetch(`/api/days/${encodeURIComponent(dayId)}`);
+      if (!res.ok) throw new Error('Failed to load day');
       const dayData = await res.json();
       setCurrentDay(dayData);
       setView('day');
     } catch (err) {
       console.error(err);
+      alert("Erro ao carregar o dia. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
-  const completeDay = async () => {
+  const completeDay = async (reflection: string) => {
     if (!user || !currentDay) return;
     
     const newProgress = Math.max(user.progress, currentDay.id);
     const newStreak = user.streak + 1; // Simplified streak logic
 
     try {
-      await fetch('/api/user/progress', {
+      // Save reflection
+      const refRes = await fetch('/api/reflections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, day_id: currentDay.id, content: reflection })
+      });
+      if (!refRes.ok) throw new Error('Failed to save reflection');
+
+      // Update progress
+      const progRes = await fetch('/api/user/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: user.email, progress: newProgress, streak: newStreak })
       });
+      if (!progRes.ok) throw new Error('Failed to update progress');
       
       setUser({ ...user, progress: newProgress, streak: newStreak });
       setView('home');
@@ -877,9 +949,10 @@ export default function App() {
             onToggleTheme={toggleTheme}
           />
         )}
-        {view === 'day' && currentDay && (
+        {view === 'day' && currentDay && user && (
           <DayDetail 
             day={currentDay} 
+            userId={user.id}
             onComplete={completeDay} 
             onBack={() => setView('home')} 
           />
