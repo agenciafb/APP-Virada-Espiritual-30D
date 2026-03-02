@@ -22,7 +22,13 @@ import {
   Save,
   Check,
   Volume2,
-  Loader2
+  Loader2,
+  Smartphone,
+  Share,
+  PlusSquare,
+  MoreVertical,
+  Download,
+  X
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -144,11 +150,101 @@ const ProgressBar = ({ current, total }: { current: number; total: number }) => 
 
 // --- Pages ---
 
+const InstallGuide = ({ onClose }: { onClose: () => void }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="glass-card w-full max-w-sm p-8 space-y-8 relative overflow-hidden"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 opacity-40 hover:opacity-100">
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 rounded-2xl gold-gradient mx-auto flex items-center justify-center shadow-lg shadow-gold-500/20">
+            <Smartphone className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-2xl display-bold gold-text">Instalar no Celular</h2>
+          <p className="text-xs opacity-50 uppercase tracking-widest font-bold">Web App Premium</p>
+        </div>
+
+        <div className="space-y-8">
+          {/* iOS Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <span className="text-xs font-bold">iOS</span>
+              </div>
+              <h3 className="text-sm font-bold uppercase tracking-widest opacity-80">iPhone / iPad</h3>
+            </div>
+            <ul className="space-y-3 text-sm opacity-60">
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">1</div>
+                <p>Abra no <span className="font-bold text-white">Safari</span></p>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">2</div>
+                <p>Toque no ícone de <span className="font-bold text-white">Compartilhar</span> <Share className="w-4 h-4 inline mb-1" /></p>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">3</div>
+                <p>Selecione <span className="font-bold text-white">"Adicionar à Tela de Início"</span> <PlusSquare className="w-4 h-4 inline mb-1" /></p>
+              </li>
+            </ul>
+          </div>
+
+          <div className="h-px bg-white/5" />
+
+          {/* Android Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <span className="text-xs font-bold">AND</span>
+              </div>
+              <h3 className="text-sm font-bold uppercase tracking-widest opacity-80">Android / Chrome</h3>
+            </div>
+            <ul className="space-y-3 text-sm opacity-60">
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">1</div>
+                <p>Abra no <span className="font-bold text-white">Google Chrome</span></p>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">2</div>
+                <p>Toque nos <span className="font-bold text-white">três pontos</span> <MoreVertical className="w-4 h-4 inline mb-1" /> no topo</p>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">3</div>
+                <p>Toque em <span className="font-bold text-white">"Instalar Aplicativo"</span> <Download className="w-4 h-4 inline mb-1" /></p>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <Button variant="gold" className="w-full py-4" onClick={onClose}>
+          Entendi
+        </Button>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string) => void; theme: 'light' | 'dark'; onToggleTheme: () => void }) => {
   const [email, setEmail] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col p-8 md:p-12 bg-zinc-950 text-white">
+      <AnimatePresence>
+        {showGuide && <InstallGuide onClose={() => setShowGuide(false)} />}
+      </AnimatePresence>
+
       <header className="flex justify-between items-center mb-12">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center shadow-lg shadow-gold-500/20">
@@ -156,9 +252,18 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string)
           </div>
           <span className="display-bold text-2xl tracking-tight gold-text">Virada 30D</span>
         </div>
-        <button onClick={onToggleTheme} className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors">
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowGuide(true)}
+            className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors flex items-center gap-2"
+          >
+            <Download className="w-5 h-5 opacity-60" />
+            <span className="text-[10px] uppercase tracking-widest font-bold hidden sm:inline">Instalar</span>
+          </button>
+          <button onClick={onToggleTheme} className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors">
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
       </header>
 
       <motion.div 
