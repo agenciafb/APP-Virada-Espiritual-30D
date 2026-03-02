@@ -20,11 +20,83 @@ import {
   Trophy,
   MessageSquare,
   Save,
-  Check
+  Check,
+  Volume2,
+  Loader2
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
+import { GoogleGenAI, Modality } from "@google/genai";
 
 // --- Components ---
+
+const AudioButton = ({ text, className = "" }: { text: string; className?: string }) => {
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+
+  const handlePlay = async () => {
+    if (loading || playing) return;
+    setLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Diga com autoridade e fé: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Gemini TTS returns raw 16-bit PCM (L16)
+        const int16Array = new Int16Array(bytes.buffer);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) {
+          float32Array[i] = int16Array[i] / 32768;
+        }
+
+        const audioBuffer = audioContext.createBuffer(1, float32Array.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Array);
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.onended = () => {
+          setPlaying(false);
+          audioContext.close();
+        };
+        setPlaying(true);
+        source.start();
+      }
+    } catch (err) {
+      console.error("TTS Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handlePlay}
+      className={`p-2 rounded-full transition-all ${playing ? 'bg-gold-500 text-white' : 'bg-gold-500/10 text-gold-500 hover:bg-gold-500/20'} ${className}`}
+      disabled={loading}
+    >
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+    </button>
+  );
+};
 
 const Button = ({ 
   children, 
@@ -96,10 +168,10 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string)
         className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full space-y-16"
       >
         <div className="space-y-6">
-          <h1 className="text-6xl md:text-7xl display-bold leading-[0.9] tracking-tighter">
+          <h1 className="text-4xl md:text-6xl display-bold leading-[1.1] tracking-tighter">
             Transforme sua <span className="serif-italic gold-text">essência</span> em 30 dias.
           </h1>
-          <p className="text-zinc-400 text-xl max-w-lg leading-relaxed">
+          <p className="text-zinc-400 text-lg md:text-xl max-w-lg leading-relaxed">
             Uma jornada guiada para renovar sua mente, fortalecer sua fé e viver o propósito extraordinário de Deus.
           </p>
         </div>
@@ -177,7 +249,7 @@ const HomePage = ({
       <header className="p-8 flex justify-between items-center">
         <div className="space-y-1">
           <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Bem-vindo à sua jornada</p>
-          <h2 className="text-3xl display-bold">Olá, <span className="serif-italic gold-text">{user.name}</span></h2>
+          <h2 className="text-2xl md:text-3xl display-bold">Olá, <span className="serif-italic gold-text">{user.name}</span></h2>
         </div>
         <div className="flex items-center gap-4">
           <button onClick={onToggleTheme} className="p-3 rounded-full border border-zinc-200 dark:border-white/10 glass-card">
@@ -260,9 +332,12 @@ const HomePage = ({
           <section className="glass-card p-8 relative overflow-hidden group">
             <Quote className="absolute -top-4 -left-4 w-24 h-24 opacity-[0.03] rotate-12" />
             <div className="relative z-10 space-y-6">
-              <p className="serif-italic text-2xl leading-relaxed italic opacity-90">
-                "{dailyDeclaration.content}"
-              </p>
+              <div className="flex justify-between items-start">
+                <p className="serif-italic text-2xl leading-relaxed italic opacity-90 flex-1">
+                  "{dailyDeclaration.content}"
+                </p>
+                <AudioButton text={dailyDeclaration.content} className="ml-4" />
+              </div>
               <div className="flex items-center gap-3">
                 <div className="h-px w-8 bg-gold-500/30" />
                 <span className="text-[10px] uppercase tracking-widest font-bold opacity-50">
@@ -327,7 +402,7 @@ const DayDetail = ({
 
       <main className="px-6 space-y-12 mt-8">
         <div className="space-y-6">
-          <h1 className="text-5xl display-bold leading-tight gold-text">{day.title}</h1>
+          <h1 className="text-3xl md:text-5xl display-bold leading-tight gold-text">{day.title}</h1>
           <div className="glass-card p-8 border-l-4 border-l-gold-500 relative overflow-hidden">
             <Quote className="absolute -top-4 -right-4 w-24 h-24 opacity-[0.03] rotate-12" />
             <p className="serif-italic text-2xl leading-relaxed italic opacity-90">
@@ -374,7 +449,10 @@ const DayDetail = ({
           />
         </section>
 
-        <section className="glass-card p-8 text-center space-y-4 bg-gold-500/[0.03] border-gold-500/20">
+        <section className="glass-card p-8 text-center space-y-4 bg-gold-500/[0.03] border-gold-500/20 relative group">
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <AudioButton text={day.declaration} />
+          </div>
           <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Decreto de Hoje</h3>
           <p className="text-2xl display-bold italic">"{day.declaration}"</p>
         </section>
@@ -455,16 +533,22 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="space-y-12"
             >
-              <div className="space-y-4">
-                <span className="text-red-500 font-bold uppercase text-[10px] tracking-[0.3em] px-3 py-1 bg-red-500/10 rounded-full">{selectedPrayer.category}</span>
-                <h1 className="text-4xl display-bold leading-tight gold-text">{selectedPrayer.title}</h1>
+              <div className="space-y-4 flex justify-between items-start">
+                <div className="space-y-4">
+                  <span className="text-red-500 font-bold uppercase text-[10px] tracking-[0.3em] px-3 py-1 bg-red-500/10 rounded-full">{selectedPrayer.category}</span>
+                  <h1 className="text-2xl md:text-4xl display-bold leading-tight gold-text">{selectedPrayer.title}</h1>
+                </div>
+                <AudioButton text={selectedPrayer.content} className="mt-2" />
               </div>
 
               <div className="space-y-6 text-xl leading-relaxed serif-italic opacity-90">
                 {selectedPrayer.content.split('\n').map((p, i) => <p key={i}>{p}</p>)}
               </div>
 
-              <div className="glass-card p-8 text-center space-y-4 bg-red-500/[0.03] border-red-500/20">
+              <div className="glass-card p-8 text-center space-y-4 bg-red-500/[0.03] border-red-500/20 relative group">
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <AudioButton text={selectedPrayer.declaration} />
+                </div>
                 <h3 className="text-red-500 font-bold uppercase text-[10px] tracking-[0.3em]">Declaração de Autoridade</h3>
                 <p className="text-2xl display-bold italic">"{selectedPrayer.declaration}"</p>
               </div>
@@ -520,7 +604,7 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
       <main className="px-6 space-y-8 mt-6">
         <div className="space-y-1">
           <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Ativação Espiritual</p>
-          <h3 className="text-2xl display-bold">Declare a Palavra</h3>
+          <h3 className="text-xl md:text-2xl display-bold">Declare a Palavra</h3>
         </div>
         
         <div className="space-y-6">
@@ -530,12 +614,15 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
               whileHover={{ y: -4 }}
               className="glass-card p-8 space-y-4 relative group"
             >
-              <button 
-                onClick={() => handleShare(decl)}
-                className="absolute top-6 right-6 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Share2 className="w-5 h-5 opacity-40 hover:opacity-100" />
-              </button>
+              <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <AudioButton text={decl.content} />
+                <button 
+                  onClick={() => handleShare(decl)}
+                  className="p-2 bg-zinc-800/50 rounded-full hover:bg-zinc-700 transition-colors"
+                >
+                  <Share2 className="w-4 h-4 opacity-40 hover:opacity-100" />
+                </button>
+              </div>
               <Quote className="w-8 h-8 text-gold-500 opacity-20" />
               <p className="text-2xl serif-italic leading-relaxed">"{decl.content}"</p>
               <div className="flex items-center gap-3">
@@ -584,8 +671,8 @@ const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
       </div>
 
       <div className="space-y-6 max-w-md">
-        <h1 className="text-6xl display-bold gold-text">Vitória!</h1>
-        <p className="text-2xl serif-italic opacity-90">Você concluiu os 30 dias da sua jornada espiritual.</p>
+        <h1 className="text-4xl md:text-6xl display-bold gold-text">Vitória!</h1>
+        <p className="text-xl md:text-2xl serif-italic opacity-90">Você concluiu os 30 dias da sua jornada espiritual.</p>
         <p className="text-zinc-500 leading-relaxed">
           Sua dedicação produziu frutos eternos. Este não é o fim, mas o início de uma nova estação de autoridade e propósito em sua vida.
         </p>
@@ -628,7 +715,7 @@ const ProfilePage = ({ user, onBack, onLogout }: { user: User; onBack: () => voi
             {user.name[0].toUpperCase()}
           </div>
           <div className="space-y-1">
-            <h1 className="text-3xl display-bold">{user.name}</h1>
+            <h1 className="text-2xl md:text-3xl display-bold">{user.name}</h1>
             <p className="opacity-40 text-sm font-medium tracking-widest uppercase">{user.email}</p>
           </div>
         </div>
@@ -707,7 +794,7 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
       <main className="px-6 space-y-12 mt-8">
         <div className="space-y-1">
           <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Consistência Diária</p>
-          <h3 className="text-2xl display-bold">Sua Rotina Espiritual</h3>
+          <h3 className="text-xl md:text-2xl display-bold">Sua Rotina Espiritual</h3>
         </div>
 
         <section className="space-y-6">
@@ -831,7 +918,7 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
       <main className="px-6 space-y-12 mt-8">
         <div className="space-y-1">
           <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Reflexão Diária</p>
-          <h3 className="text-2xl display-bold">Sua Jornada com Deus</h3>
+          <h3 className="text-xl md:text-2xl display-bold">Sua Jornada com Deus</h3>
         </div>
 
         <section className="space-y-6">
