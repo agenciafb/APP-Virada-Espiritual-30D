@@ -7,7 +7,9 @@ import {
   Quote, 
   CheckCircle2, 
   ChevronRight, 
+  ChevronLeft,
   ArrowLeft,
+  ArrowRight,
   Sun,
   Moon,
   Lock,
@@ -15,7 +17,10 @@ import {
   BookOpen,
   User as UserIcon,
   Share2,
-  Trophy
+  Trophy,
+  MessageSquare,
+  Save,
+  Check
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 
@@ -71,54 +76,69 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string)
   const [email, setEmail] = useState('');
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="absolute top-6 right-6">
-        <button onClick={onToggleTheme} className="p-3 rounded-full bg-zinc-900/10 dark:bg-zinc-100/10 border border-zinc-200 dark:border-white/10">
+    <div className="min-h-screen flex flex-col p-8 md:p-12 bg-zinc-950 text-white">
+      <header className="flex justify-between items-center mb-12">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center shadow-lg shadow-gold-500/20">
+            <Flame className="w-6 h-6 text-white" />
+          </div>
+          <span className="display-bold text-2xl tracking-tight gold-text">Virada 30D</span>
+        </div>
+        <button onClick={onToggleTheme} className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors">
           {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
-      </div>
+      </header>
+
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md text-center space-y-8"
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full space-y-16"
       >
-        <div className="space-y-2">
-          <h1 className="text-4xl font-serif italic gold-text">Virada Espiritual</h1>
-          <p className="opacity-60">Sua jornada de 30 dias com Deus começa aqui.</p>
+        <div className="space-y-6">
+          <h1 className="text-6xl md:text-7xl display-bold leading-[0.9] tracking-tighter">
+            Transforme sua <span className="serif-italic gold-text">essência</span> em 30 dias.
+          </h1>
+          <p className="text-zinc-400 text-xl max-w-lg leading-relaxed">
+            Uma jornada guiada para renovar sua mente, fortalecer sua fé e viver o propósito extraordinário de Deus.
+          </p>
         </div>
 
-        <div className="space-y-4">
-          <input 
-            type="email" 
-            placeholder="Seu melhor e-mail"
-            className="app-input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <div className="space-y-8">
+          <div className="space-y-3">
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 ml-1">Seu Acesso</label>
+            <input 
+              type="email" 
+              placeholder="Digite seu melhor e-mail"
+              className="app-input text-lg"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
           <Button 
             variant="gold" 
-            className="w-full py-4 text-lg"
+            className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/20"
             onClick={() => email && onLogin(email)}
           >
-            Entrar na Jornada
+            Iniciar Minha Jornada
           </Button>
         </div>
 
-        <div className="flex items-center gap-4 py-4">
-          <div className="h-px bg-white/10 flex-1" />
-          <span className="text-zinc-500 text-sm">ou continue com</span>
-          <div className="h-px bg-white/10 flex-1" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Button variant="outline" className="flex items-center justify-center gap-2">
-            Google
-          </Button>
-          <Button variant="outline" className="flex items-center justify-center gap-2">
-            Apple
-          </Button>
+        <div className="flex items-center gap-6 py-4 opacity-20">
+          <div className="h-px bg-current flex-1" />
+          <span className="text-[10px] uppercase tracking-[0.3em] font-bold">Conexão Segura</span>
+          <div className="h-px bg-current flex-1" />
         </div>
       </motion.div>
+
+      <footer className="mt-auto pt-12 flex justify-between items-end opacity-30">
+        <div className="text-[10px] uppercase tracking-widest leading-loose">
+          © 2026 Virada 30D<br />Edição Premium
+        </div>
+        <div className="text-right">
+          <p className="serif-italic text-sm">"Tudo posso naquele que me fortalece."</p>
+        </div>
+      </footer>
     </div>
   );
 };
@@ -153,95 +173,114 @@ const HomePage = ({
   }, [user.progress]);
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="p-6 flex justify-between items-center">
-        <div>
-          <p className="opacity-50 text-sm">Bem-vindo de volta,</p>
-          <h2 className="text-xl font-medium">{user.name}</h2>
+    <div className="min-h-screen pb-32">
+      <header className="p-8 flex justify-between items-center">
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Bem-vindo à sua jornada</p>
+          <h2 className="text-3xl display-bold">Olá, <span className="serif-italic gold-text">{user.name}</span></h2>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={onToggleTheme} className="p-3 rounded-full border border-zinc-200 dark:border-white/10">
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        <div className="flex items-center gap-4">
+          <button onClick={onToggleTheme} className="p-3 rounded-full border border-zinc-200 dark:border-white/10 glass-card">
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <div className="flex items-center gap-2 bg-zinc-900/10 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/5">
-            <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
-            <span className="font-bold text-sm">{user.streak}</span>
+          <div className="flex items-center gap-2 glass-card px-4 py-2 rounded-full border border-zinc-200 dark:border-white/5">
+            <Flame className="w-5 h-5 text-orange-500 fill-orange-500" />
+            <span className="display-bold text-lg">{user.streak}</span>
           </div>
         </div>
       </header>
 
       <main className="px-6 space-y-8">
         {/* Progress Card */}
-        <section className="card-dark p-6 space-y-4">
+        <section className="glass-card p-8 space-y-6">
           <div className="flex justify-between items-end">
-            <div>
-              <h3 className="text-2xl font-serif italic">
-                {user.progress >= 30 ? "Jornada Concluída" : `Dia ${user.progress + 1}`}
-              </h3>
-              <p className="opacity-60 text-sm">Progresso: {user.progress}/30 dias</p>
+            <div className="space-y-1">
+              <span className="text-5xl display-bold">{Math.round((user.progress / 30) * 100)}%</span>
+              <p className="text-xs uppercase tracking-widest opacity-50">Progresso Total</p>
             </div>
-            <div className="text-gold-500 text-sm font-medium">
-              {Math.round((user.progress / 30) * 100)}%
+            <div className="text-right space-y-1">
+              <span className="text-2xl display-bold text-gold-500">
+                {user.progress >= 30 ? "Concluído" : `Dia ${user.progress + 1}`}
+              </span>
+              <p className="text-[10px] uppercase tracking-widest opacity-50">Status Atual</p>
             </div>
           </div>
           <ProgressBar current={user.progress} total={30} />
+          <div className="flex justify-between text-[10px] uppercase tracking-widest font-bold opacity-40">
+            <span>Início</span>
+            <span>Destino</span>
+          </div>
+          
           {user.progress < 30 ? (
             <Button 
               variant="gold" 
-              className="w-full py-4 flex items-center justify-center gap-2"
+              className="w-full py-5 text-lg font-medium shadow-2xl shadow-gold-500/20 flex items-center justify-center gap-3 group"
               onClick={() => onStartDay(user.progress + 1)}
             >
-              Compromisso Diario
-              <ChevronRight className="w-5 h-5" />
+              Iniciar Dia {user.progress + 1}
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           ) : (
-            <div className="p-4 bg-gold-500/10 border border-gold-500/20 rounded-xl text-center">
-              <p className="text-gold-600 dark:text-gold-400 font-medium">Você completou o desafio!</p>
+            <div className="p-6 bg-gold-500/5 border border-gold-500/20 rounded-2xl text-center">
+              <p className="gold-text font-bold text-lg">Jornada Concluída com Sucesso!</p>
             </div>
           )}
         </section>
 
-        {/* Quick Access */}
-        <section className="grid grid-cols-2 gap-4">
+        {/* Action Grid */}
+        <div className="grid grid-cols-2 gap-4">
           <button 
-            onClick={onOpenCrisis}
-            className="card-dark p-4 flex flex-col items-center gap-3 hover:bg-zinc-800/50 transition-colors"
+            onClick={onOpenChecklist}
+            className="glass-card p-6 flex flex-col items-center text-center gap-4 group"
           >
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-              <Heart className="w-6 h-6 text-red-500" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
             </div>
-            <span className="font-medium">Orações</span>
+            <div className="space-y-1">
+              <span className="text-sm font-bold uppercase tracking-widest">Hábitos</span>
+              <p className="text-[10px] opacity-50">Checklist Diário</p>
+            </div>
           </button>
           <button 
             onClick={onOpenDeclarations}
-            className="card-dark p-4 flex flex-col items-center gap-3 hover:bg-zinc-800/50 transition-colors"
+            className="glass-card p-6 flex flex-col items-center text-center gap-4 group"
           >
-            <div className="w-12 h-12 rounded-full bg-gold-500/10 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-gold-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Quote className="w-6 h-6 text-gold-500" />
             </div>
-            <span className="font-medium">Declarações Proféticas</span>
-          </button>
-          <button 
-            onClick={onOpenChecklist}
-            className="card-dark p-4 flex flex-col items-center gap-3 hover:bg-zinc-800/50 transition-colors col-span-2"
-          >
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            <div className="space-y-1">
+              <span className="text-sm font-bold uppercase tracking-widest">Decretos</span>
+              <p className="text-[10px] opacity-50">Palavras de Fé</p>
             </div>
-            <span className="font-medium">Checklists Diários</span>
           </button>
-        </section>
+        </div>
 
         {/* Daily Verse */}
         {dailyDeclaration && (
-          <section className="text-center py-8 space-y-4 opacity-60">
-            <Quote className="w-8 h-8 mx-auto text-gold-500/40" />
-            <p className="text-lg font-serif italic leading-relaxed">
-              "{dailyDeclaration.content}"
-            </p>
-            <p className="text-sm uppercase tracking-widest">{dailyDeclaration.reference}</p>
+          <section className="glass-card p-8 relative overflow-hidden group">
+            <Quote className="absolute -top-4 -left-4 w-24 h-24 opacity-[0.03] rotate-12" />
+            <div className="relative z-10 space-y-6">
+              <p className="serif-italic text-2xl leading-relaxed italic opacity-90">
+                "{dailyDeclaration.content}"
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="h-px w-8 bg-gold-500/30" />
+                <span className="text-[10px] uppercase tracking-widest font-bold opacity-50">
+                  {dailyDeclaration.reference}
+                </span>
+              </div>
+            </div>
           </section>
         )}
+
+        {/* Emergency Button */}
+        <button 
+          onClick={onOpenCrisis}
+          className="w-full py-6 rounded-2xl border border-red-500/20 text-red-500 text-xs font-bold uppercase tracking-[0.3em] hover:bg-red-500/5 transition-colors flex items-center justify-center gap-2"
+        >
+          <Heart className="w-4 h-4" />
+          Botão de Emergência
+        </button>
       </main>
     </div>
   );
@@ -272,52 +311,79 @@ const DayDetail = ({
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="min-h-screen pb-12"
+      className="min-h-screen pb-32"
     >
-      <header className="p-6 flex items-center justify-between sticky top-0 bg-transparent backdrop-blur-md z-10">
+      <header className="p-6 flex items-center justify-between sticky top-0 z-50 nav-blur">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 -ml-2">
-            <ArrowLeft className="w-6 h-6" />
+          <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+            <ChevronLeft className="w-6 h-6" />
           </button>
-          <h2 className="text-lg font-medium">Dia {day.id}</h2>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Jornada 30D</p>
+            <h2 className="text-lg display-bold">Dia {day.id}</h2>
+          </div>
         </div>
       </header>
 
-      <main className="px-6 space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-serif italic gold-text">{day.title}</h1>
-          <div className="p-4 bg-zinc-900/10 dark:bg-zinc-900/50 border-l-2 border-gold-500 italic opacity-80">
-            "{day.verse}"
+      <main className="px-6 space-y-12 mt-8">
+        <div className="space-y-6">
+          <h1 className="text-5xl display-bold leading-tight gold-text">{day.title}</h1>
+          <div className="glass-card p-8 border-l-4 border-l-gold-500 relative overflow-hidden">
+            <Quote className="absolute -top-4 -right-4 w-24 h-24 opacity-[0.03] rotate-12" />
+            <p className="serif-italic text-2xl leading-relaxed italic opacity-90">
+              "{day.verse}"
+            </p>
           </div>
         </div>
 
-        <section className="space-y-4">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Reflexão</h3>
-          <p className="opacity-80 leading-relaxed">{day.reflection}</p>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-4 h-4 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Reflexão Profunda</h3>
+          </div>
+          <div className="prose prose-zinc dark:prose-invert max-w-none">
+            <p className="text-xl leading-relaxed opacity-80 whitespace-pre-line serif-italic">
+              {day.reflection}
+            </p>
+          </div>
         </section>
 
-        <section className="space-y-4">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Aplicação Prática</h3>
-          <p className="opacity-80 leading-relaxed">{day.application}</p>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Flame className="w-4 h-4 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Aplicação Prática</h3>
+          </div>
+          <div className="glass-card p-8 bg-gold-500/[0.02]">
+            <p className="text-lg leading-relaxed opacity-80">
+              {day.application}
+            </p>
+          </div>
         </section>
 
-        <section className="space-y-4">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Exercício de Escrita</h3>
-          <p className="opacity-60 text-sm">{day.exercise}</p>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <MessageSquare className="w-4 h-4 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Diário de Transformação</h3>
+          </div>
+          <p className="text-sm opacity-50 italic">{day.exercise}</p>
           <textarea 
-            className="app-input min-h-[120px]"
-            placeholder="Escreva aqui seus pensamentos..."
+            className="app-input min-h-[200px] resize-none text-lg serif-italic"
+            placeholder="O que o Espírito Santo falou ao seu coração hoje?"
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
           />
         </section>
 
-        <section className="card-dark p-6 text-center space-y-4 bg-gold-950/5 dark:bg-gold-950/20 border-gold-500/20">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Declaração Profética</h3>
-          <p className="text-xl font-serif italic">"{day.declaration}"</p>
+        <section className="glass-card p-8 text-center space-y-4 bg-gold-500/[0.03] border-gold-500/20">
+          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Decreto de Hoje</h3>
+          <p className="text-2xl display-bold italic">"{day.declaration}"</p>
         </section>
 
-        <Button variant="gold" className="w-full py-4" onClick={() => onComplete(reflection)}>
+        <Button 
+          variant="gold" 
+          className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/30" 
+          onClick={() => onComplete(reflection)}
+        >
           Concluir Dia {day.id}
         </Button>
       </main>
@@ -347,14 +413,14 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
+        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Orações</h2>
+        <h2 className="text-lg display-bold">Orações de Poder</h2>
       </header>
 
-      <main className="px-6 space-y-6">
+      <main className="px-6 space-y-8 mt-6">
         <AnimatePresence mode="wait">
           {!selectedPrayer ? (
             <motion.div 
@@ -362,19 +428,24 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 gap-3"
+              className="space-y-6"
             >
-              <p className="opacity-60 mb-2">O que você está enfrentando agora?</p>
-              {categories.map(cat => (
-                <button 
-                  key={cat}
-                  onClick={() => setSelectedPrayer(getPrayerByCategory(cat))}
-                  className="card-dark p-5 flex justify-between items-center hover:bg-zinc-800/20 transition-colors"
-                >
-                  <span className="text-lg font-medium">{cat}</span>
-                  <ChevronRight className="w-5 h-5 opacity-40" />
-                </button>
-              ))}
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Socorro Bem Presente</p>
+                <h3 className="text-2xl display-bold">O que você está enfrentando?</h3>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {categories.map(cat => (
+                  <button 
+                    key={cat}
+                    onClick={() => setSelectedPrayer(getPrayerByCategory(cat))}
+                    className="glass-card p-6 flex justify-between items-center group"
+                  >
+                    <span className="text-lg font-medium group-hover:gold-text transition-colors">{cat}</span>
+                    <ChevronRight className="w-5 h-5 opacity-20 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                  </button>
+                ))}
+              </div>
             </motion.div>
           ) : (
             <motion.div 
@@ -382,25 +453,27 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-8"
+              className="space-y-12"
             >
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <span className="text-red-500 font-bold uppercase text-xs tracking-widest">{selectedPrayer.category}</span>
-                  <h1 className="text-3xl font-serif italic gold-text">{selectedPrayer.title}</h1>
-                </div>
+              <div className="space-y-4">
+                <span className="text-red-500 font-bold uppercase text-[10px] tracking-[0.3em] px-3 py-1 bg-red-500/10 rounded-full">{selectedPrayer.category}</span>
+                <h1 className="text-4xl display-bold leading-tight gold-text">{selectedPrayer.title}</h1>
               </div>
 
-              <div className="space-y-4 opacity-80 leading-relaxed text-lg">
+              <div className="space-y-6 text-xl leading-relaxed serif-italic opacity-90">
                 {selectedPrayer.content.split('\n').map((p, i) => <p key={i}>{p}</p>)}
               </div>
 
-              <div className="card-dark p-6 text-center space-y-4 bg-red-950/5 dark:bg-red-950/10 border-red-500/20">
-                <h3 className="text-red-500 font-bold uppercase text-xs tracking-widest">Declaração de Poder</h3>
-                <p className="text-xl font-serif italic">"{selectedPrayer.declaration}"</p>
+              <div className="glass-card p-8 text-center space-y-4 bg-red-500/[0.03] border-red-500/20">
+                <h3 className="text-red-500 font-bold uppercase text-[10px] tracking-[0.3em]">Declaração de Autoridade</h3>
+                <p className="text-2xl display-bold italic">"{selectedPrayer.declaration}"</p>
               </div>
 
-              <Button variant="outline" className="w-full" onClick={() => { setSelectedPrayer(null); }}>
+              <Button 
+                variant="outline" 
+                className="w-full py-5 rounded-2xl border-white/10 hover:bg-white/5" 
+                onClick={() => { setSelectedPrayer(null); }}
+              >
                 Escolher outro motivo
               </Button>
             </motion.div>
@@ -437,31 +510,40 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
+        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Declarações Proféticas</h2>
+        <h2 className="text-lg display-bold">Decretos de Fé</h2>
       </header>
 
-      <main className="px-6 space-y-6">
-        <p className="opacity-60">Ative as promessas sobre sua vida.</p>
-        <div className="space-y-4">
+      <main className="px-6 space-y-8 mt-6">
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Ativação Espiritual</p>
+          <h3 className="text-2xl display-bold">Declare a Palavra</h3>
+        </div>
+        
+        <div className="space-y-6">
           {declarations.map(decl => (
             <motion.div 
               key={decl.id}
-              whileHover={{ scale: 1.02 }}
-              className="card-dark p-6 space-y-3 relative group"
+              whileHover={{ y: -4 }}
+              className="glass-card p-8 space-y-4 relative group"
             >
               <button 
                 onClick={() => handleShare(decl)}
-                className="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-6 right-6 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <Share2 className="w-4 h-4 opacity-40" />
+                <Share2 className="w-5 h-5 opacity-40 hover:opacity-100" />
               </button>
-              <Quote className="w-5 h-5 text-gold-500 opacity-40" />
-              <p className="text-xl font-serif italic leading-relaxed">"{decl.content}"</p>
-              <p className="text-xs uppercase tracking-widest text-gold-600 dark:text-gold-500">{decl.reference}</p>
+              <Quote className="w-8 h-8 text-gold-500 opacity-20" />
+              <p className="text-2xl serif-italic leading-relaxed">"{decl.content}"</p>
+              <div className="flex items-center gap-3">
+                <div className="h-px w-6 bg-gold-500/30" />
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gold-600 dark:text-gold-500">
+                  {decl.reference}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -473,43 +555,54 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
 const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-8 bg-gold-950/10 dark:bg-gold-950/20"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-12 bg-zinc-950"
     >
       <div className="relative">
         <motion.div 
-          animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
-          transition={{ repeat: Infinity, duration: 4 }}
-          className="w-32 h-32 rounded-full gold-gradient flex items-center justify-center shadow-2xl shadow-gold-500/40"
+          animate={{ 
+            scale: [1, 1.1, 1],
+            rotate: [0, 5, -5, 0]
+          }}
+          transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+          className="w-48 h-48 rounded-full gold-gradient flex items-center justify-center shadow-[0_0_100px_rgba(212,175,55,0.2)]"
         >
-          <Trophy className="w-16 h-16 text-white" />
+          <Trophy className="w-24 h-24 text-white" />
         </motion.div>
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute -top-4 -right-4"
-        >
-          <Star className="w-8 h-8 text-gold-500 fill-gold-500" />
-        </motion.div>
+        {[...Array(6)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: [0, 1, 0], scale: [0, 1, 0], y: -100, x: (i - 2.5) * 40 }}
+            transition={{ repeat: Infinity, duration: 2, delay: i * 0.3 }}
+            className="absolute top-1/2 left-1/2"
+          >
+            <Star className="w-6 h-6 text-gold-400 fill-gold-400" />
+          </motion.div>
+        ))}
       </div>
 
-      <div className="space-y-4">
-        <h1 className="text-4xl font-serif italic gold-text">Parabéns!</h1>
-        <p className="text-xl opacity-80">Você completou os 30 dias da sua jornada espiritual.</p>
-        <p className="opacity-60 leading-relaxed">
-          Sua dedicação e compromisso com o Reino de Deus produziram frutos eternos. 
-          Este é apenas o começo de uma vida transformada pela Palavra.
+      <div className="space-y-6 max-w-md">
+        <h1 className="text-6xl display-bold gold-text">Vitória!</h1>
+        <p className="text-2xl serif-italic opacity-90">Você concluiu os 30 dias da sua jornada espiritual.</p>
+        <p className="text-zinc-500 leading-relaxed">
+          Sua dedicação produziu frutos eternos. Este não é o fim, mas o início de uma nova estação de autoridade e propósito em sua vida.
         </p>
       </div>
 
-      <div className="w-full space-y-4">
-        <Button variant="gold" className="w-full py-4" onClick={onBack}>
+      <div className="w-full max-w-sm space-y-6">
+        <Button 
+          variant="gold" 
+          className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/30" 
+          onClick={onBack}
+        >
           Continuar Navegando
         </Button>
-        <p className="text-xs uppercase tracking-widest opacity-40">
-          "Combati o bom combate, acabei a carreira, guardei a fé." - 2 Timóteo 4:7
-        </p>
+        <div className="space-y-2 opacity-30">
+          <p className="serif-italic text-sm">"Combati o bom combate, acabei a carreira, guardei a fé."</p>
+          <p className="text-[10px] uppercase tracking-widest font-bold">2 Timóteo 4:7</p>
+        </div>
       </div>
     </motion.div>
   );
@@ -518,47 +611,54 @@ const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
 const ProfilePage = ({ user, onBack, onLogout }: { user: User; onBack: () => void; onLogout: () => void }) => {
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
+        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Meu Perfil</h2>
+        <h2 className="text-lg display-bold">Meu Perfil</h2>
       </header>
 
-      <main className="px-6 space-y-8">
-        <div className="flex flex-col items-center text-center space-y-4">
-          <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-white text-3xl font-bold">
+      <main className="px-6 space-y-12 mt-8">
+        <div className="flex flex-col items-center text-center space-y-6">
+          <div className="w-32 h-32 rounded-full gold-gradient flex items-center justify-center text-white text-5xl display-bold shadow-2xl shadow-gold-500/20">
             {user.name[0].toUpperCase()}
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">{user.name}</h1>
-            <p className="opacity-50 text-sm">{user.email}</p>
+          <div className="space-y-1">
+            <h1 className="text-3xl display-bold">{user.name}</h1>
+            <p className="opacity-40 text-sm font-medium tracking-widest uppercase">{user.email}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="card-dark p-6 text-center space-y-2">
-            <Trophy className="w-6 h-6 mx-auto text-gold-500" />
-            <div className="text-2xl font-bold">{user.progress}</div>
-            <div className="text-[10px] uppercase tracking-widest opacity-50">Dias Concluídos</div>
+          <div className="glass-card p-8 text-center space-y-2">
+            <Trophy className="w-8 h-8 mx-auto text-gold-500 opacity-50" />
+            <div className="text-4xl display-bold">{user.progress}</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold opacity-40">Dias Concluídos</div>
           </div>
-          <div className="card-dark p-6 text-center space-y-2">
-            <Flame className="w-6 h-6 mx-auto text-orange-500" />
-            <div className="text-2xl font-bold">{user.streak}</div>
-            <div className="text-[10px] uppercase tracking-widest opacity-50">Dias Seguidos</div>
+          <div className="glass-card p-8 text-center space-y-2">
+            <Flame className="w-8 h-8 mx-auto text-orange-500 opacity-50" />
+            <div className="text-4xl display-bold">{user.streak}</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold opacity-40">Dias Seguidos</div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-widest opacity-40">Configurações</h3>
-          <button onClick={onLogout} className="w-full card-dark p-4 text-left text-red-500 flex items-center gap-3">
-            <Lock className="w-5 h-5" />
-            <span>Sair da Conta</span>
-          </button>
+        <div className="space-y-6">
+          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40 ml-1">Configurações</h3>
+          <div className="space-y-3">
+            <button onClick={onLogout} className="w-full glass-card p-6 text-left text-red-500 flex items-center justify-between group">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <span className="font-bold uppercase tracking-widest text-sm">Sair da Conta</span>
+              </div>
+              <ChevronRight className="w-5 h-5 opacity-20 group-hover:translate-x-1 transition-all" />
+            </button>
+          </div>
         </div>
       </main>
     </motion.div>
@@ -583,123 +683,90 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
       .catch(err => console.error(err));
   }, [userId, today]);
 
-  const saveChecklist = (newMorning: string[], newNight: string[]) => {
-    fetch('/api/checklists', {
+  const saveChecklist = async (m: string[], n: string[]) => {
+    await fetch('/api/checklists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: userId,
-        date: today,
-        morning_status: newMorning,
-        night_status: newNight
-      })
-    }).then(res => {
-      if (!res.ok) console.error('Failed to save checklist');
-    }).catch(err => console.error(err));
-  };
-
-  const morningItems = [
-    "Agradeci 3 bênçãos",
-    "Declarei minha identidade",
-    "Li um versículo",
-    "Orei por proteção",
-    "Identifiquei um ato de obediência"
-  ];
-
-  const nightItems = [
-    "Onde vi Deus agir hoje?",
-    "Que vitória celebro?",
-    "O que aprendi?",
-    "Pelo que sou grato?"
-  ];
-
-  const toggleItem = (item: string, list: string[], setList: (l: string[]) => void, isMorning: boolean) => {
-    const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
-    setList(newList);
-    
-    // Check if all items are completed
-    const allMorningCompleted = isMorning ? newList.length === morningItems.length : morning.length === morningItems.length;
-    const allNightCompleted = !isMorning ? newList.length === nightItems.length : night.length === nightItems.length;
-
-    if (allMorningCompleted && allNightCompleted) {
-      // Automatic reset logic if desired, or just show a message.
-      // The user said "reset when completed".
-      setTimeout(() => {
-        if (confirm("Parabéns! Você completou todos os checklists de hoje. Deseja reiniciar para amanhã?")) {
-          setMorning([]);
-          setNight([]);
-          saveChecklist([], []);
-        }
-      }, 500);
-    }
-
-    if (isMorning) saveChecklist(newList, night);
-    else saveChecklist(morning, newList);
+      body: JSON.stringify({ user_id: userId, date: today, morning_status: m, night_status: n })
+    });
   };
 
   return (
     <motion.div 
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
+        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Checklists Diários</h2>
+        <h2 className="text-lg display-bold">Hábitos de Sucesso</h2>
       </header>
 
-      <main className="px-6 space-y-8">
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 text-gold-500">
-            <Sun className="w-5 h-5" />
-            <h3 className="font-bold uppercase text-xs tracking-widest">Checklist Matinal</h3>
+      <main className="px-6 space-y-12 mt-8">
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Consistência Diária</p>
+          <h3 className="text-2xl display-bold">Sua Rotina Espiritual</h3>
+        </div>
+
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Sun className="w-5 h-5 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Manhã com Deus</h3>
           </div>
-          <div className="space-y-2">
-            {morningItems.map(item => (
+          <div className="space-y-3">
+            {['Oração ao acordar', 'Leitura da Palavra', 'Afirmações de Fé', 'Gratidão'].map((item) => (
               <button 
                 key={item}
-                onClick={() => toggleItem(item, morning, setMorning, true)}
-                className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${
-                  morning.includes(item) 
-                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500' 
-                    : 'bg-zinc-900/5 dark:bg-zinc-900 border-zinc-200 dark:border-white/5 opacity-60'
+                onClick={() => {
+                  const next = morning.includes(item) ? morning.filter(i => i !== item) : [...morning, item];
+                  setMorning(next);
+                  saveChecklist(next, night);
+                }}
+                className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
+                  morning.includes(item)
+                    ? 'bg-gold-500/10 border-gold-500/30 text-gold-500'
+                    : 'bg-white/5 border-white/5 opacity-60'
                 }`}
               >
-                <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-                  morning.includes(item) ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-300 dark:border-white/20'
+                <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                  morning.includes(item) ? 'bg-gold-500 border-gold-500' : 'border-current opacity-20'
                 }`}>
-                  {morning.includes(item) && <CheckCircle2 className="w-4 h-4 text-white dark:text-black" />}
+                  {morning.includes(item) && <Check className="w-4 h-4 text-white" />}
                 </div>
-                <span className="text-sm font-medium">{item}</span>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 text-indigo-500">
-            <Moon className="w-5 h-5" />
-            <h3 className="font-bold uppercase text-xs tracking-widest">Checklist Noturno</h3>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Moon className="w-5 h-5 text-blue-400" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Noite de Entrega</h3>
           </div>
-          <div className="space-y-2">
-            {nightItems.map(item => (
+          <div className="space-y-3">
+            {['Revisão do dia', 'Oração de entrega', 'Diário de gratidão', 'Desconexão digital'].map((item) => (
               <button 
                 key={item}
-                onClick={() => toggleItem(item, night, setNight, false)}
-                className={`w-full p-4 rounded-xl border flex items-center gap-3 transition-all ${
-                  night.includes(item) 
-                    ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-500' 
-                    : 'bg-zinc-900/5 dark:bg-zinc-900 border-zinc-200 dark:border-white/5 opacity-60'
+                onClick={() => {
+                  const next = night.includes(item) ? night.filter(i => i !== item) : [...night, item];
+                  setNight(next);
+                  saveChecklist(morning, next);
+                }}
+                className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
+                  night.includes(item)
+                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                    : 'bg-white/5 border-white/5 opacity-60'
                 }`}
               >
-                <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-                  night.includes(item) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 dark:border-white/20'
+                <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                  night.includes(item) ? 'bg-blue-500 border-blue-500' : 'border-current opacity-20'
                 }`}>
-                  {night.includes(item) && <CheckCircle2 className="w-4 h-4 text-white dark:text-black" />}
+                  {night.includes(item) && <Check className="w-4 h-4 text-white" />}
                 </div>
-                <span className="text-sm font-medium">{item}</span>
               </button>
             ))}
           </div>
@@ -754,46 +821,63 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen pb-12"
     >
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2">
-          <ArrowLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
+        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-lg font-medium">Modo Diário</h2>
+        <h2 className="text-lg display-bold">Diário de Bordo</h2>
       </header>
 
-      <main className="px-6 space-y-8">
-        <div className="space-y-4">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">Pelo que você é grato hoje?</h3>
+      <main className="px-6 space-y-12 mt-8">
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Reflexão Diária</p>
+          <h3 className="text-2xl display-bold">Sua Jornada com Deus</h3>
+        </div>
+
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Heart className="w-4 h-4 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Gratidão</h3>
+          </div>
+          <p className="text-sm opacity-50 italic">Pelo que você é grato hoje?</p>
           <textarea 
-            className="app-input min-h-[120px]"
+            className="app-input min-h-[150px] resize-none text-lg serif-italic"
             placeholder="Hoje sou grato por..."
             value={gratitude}
             onChange={(e) => setGratitude(e.target.value)}
           />
-        </div>
+        </section>
 
-        <div className="space-y-4">
-          <h3 className="text-gold-600 dark:text-gold-500 font-bold uppercase text-xs tracking-widest">O que aprendeu com Deus?</h3>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-4 h-4 text-gold-500" />
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Aprendizado</h3>
+          </div>
+          <p className="text-sm opacity-50 italic">O que o Senhor te ensinou?</p>
           <textarea 
-            className="app-input min-h-[120px]"
+            className="app-input min-h-[150px] resize-none text-lg serif-italic"
             placeholder="Deus me ensinou que..."
             value={learning}
             onChange={(e) => setLearning(e.target.value)}
           />
-        </div>
+        </section>
 
-        <Button variant="gold" className="w-full py-4 flex items-center justify-center gap-2" onClick={handleSave}>
-          {saved ? <CheckCircle2 className="w-5 h-5" /> : 'Salvar no Diário'}
-          {saved ? 'Salvo!' : ''}
+        <Button 
+          variant="gold" 
+          className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/30 flex items-center justify-center gap-3" 
+          onClick={handleSave}
+        >
+          {saved ? <CheckCircle2 className="w-6 h-6" /> : <Save className="w-6 h-6" />}
+          {saved ? 'Salvo com Sucesso!' : 'Guardar Reflexão'}
         </Button>
 
         {saved && (
           <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center text-emerald-500 text-sm"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center text-emerald-500 text-sm font-medium"
           >
-            Sua reflexão foi guardada com carinho.
+            Sua reflexão foi guardada no Reino.
           </motion.p>
         )}
       </main>
