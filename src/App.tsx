@@ -1926,6 +1926,7 @@ export default function App() {
 
   const fetchAchievements = async () => {
     if (!user) return;
+    console.log("Fetching achievements for user:", user.id);
     try {
       // Fetch all achievement definitions from backend
       const res = await fetch('/api/achievements');
@@ -1945,6 +1946,7 @@ export default function App() {
         earned_at: earnedData[ach.id]?.earned_at || null
       }));
 
+      console.log("Merged achievements:", merged.filter((a: any) => a.earned_at).length, "earned");
       setAchievements(merged);
     } catch (err) {
       console.error("Error fetching achievements", err);
@@ -2043,20 +2045,23 @@ export default function App() {
       let newStreak = user.streak;
       const lastAccess = user.last_access ? new Date(user.last_access) : null;
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const lastAccessStr = lastAccess ? lastAccess.toISOString().split('T')[0] : null;
       
-      if (lastAccessStr !== todayStr) {
-        if (lastAccessStr) {
-          const diffDays = Math.floor((now.getTime() - lastAccess.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays <= 1) {
-            newStreak += 1;
-          } else {
-            newStreak = 1;
-          }
-        } else {
+      // Normalize dates to midnight for comparison
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const lastDate = lastAccess ? new Date(lastAccess.getFullYear(), lastAccess.getMonth(), lastAccess.getDate()) : null;
+      
+      if (!lastDate) {
+        newStreak = 1;
+      } else {
+        const diffTime = today.getTime() - lastDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) {
+          newStreak += 1;
+        } else if (diffDays > 1) {
           newStreak = 1;
         }
+        // if diffDays === 0, it's the same day, streak doesn't change
       }
 
       console.log("Updating user doc with progress:", newProgress, "streak:", newStreak);
@@ -2067,11 +2072,11 @@ export default function App() {
       });
 
       // Update mission status for today
-      const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-      const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+      const todayStr = today.toISOString().split('T')[0];
+      const checklistRef = doc(db, 'users', user.id, 'checklists', todayStr);
       await setDoc(checklistRef, {
         user_id: user.id,
-        date: today,
+        date: todayStr,
         mission_status: {
           devotional: true,
           prayer: true
@@ -2086,8 +2091,12 @@ export default function App() {
         "streak_30": 30
       };
 
+      console.log("Checking achievements for streak:", newStreak);
       for (const [achId, threshold] of Object.entries(thresholds)) {
-        if (newStreak >= threshold) {
+        // Only award if not already earned
+        const alreadyEarned = achievements.find(a => a.id === achId)?.earned_at;
+        if (newStreak >= threshold && !alreadyEarned) {
+          console.log("Awarding achievement:", achId);
           const achRef = doc(db, 'users', user.id, 'achievements', achId);
           await setDoc(achRef, {
             achievement_id: achId,
@@ -2096,8 +2105,8 @@ export default function App() {
         }
       }
 
-      // Re-fetch achievements
-      fetchAchievements();
+      // Re-fetch achievements to update UI
+      await fetchAchievements();
 
       console.log("Day completion successful. Navigating...");
       if (newProgress >= 30) {
