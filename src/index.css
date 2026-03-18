@@ -25,19 +25,39 @@
   --card-border: rgba(255, 255, 255, 0.08);
   --input-bg: #0a0a0a;
   --nav-bg: rgba(5, 5, 5, 0.85);
-  --muted-text: #888888;
+  --muted-text: rgba(255, 255, 255, 0.4);
   --accent-gold: #d4af37;
+  --item-bg: rgba(255, 255, 255, 0.05);
+  --item-hover: rgba(255, 255, 255, 0.1);
+  
+  --btn-primary-bg: rgba(255, 255, 255, 0.08);
+  --btn-primary-hover: rgba(255, 255, 255, 0.12);
+  --btn-primary-text: #ffffff;
+  
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-hover: #f4f4f5;
+  --btn-secondary-text: #000000;
 }
 
 :root.light {
   --bg-app: #fcfaf7;
   --text-app: #1c1917;
   --card-bg: rgba(255, 255, 255, 0.7);
-  --card-border: rgba(0, 0, 0, 0.06);
+  --card-border: rgba(0, 0, 0, 0.1);
   --input-bg: #ffffff;
   --nav-bg: rgba(252, 250, 247, 0.9);
-  --muted-text: #78716c;
+  --muted-text: rgba(28, 25, 23, 0.6);
   --accent-gold: #b45309;
+  --item-bg: rgba(0, 0, 0, 0.03);
+  --item-hover: rgba(0, 0, 0, 0.06);
+
+  --btn-primary-bg: rgba(0, 0, 0, 0.05);
+  --btn-primary-hover: rgba(0, 0, 0, 0.08);
+  --btn-primary-text: #1c1917;
+
+  --btn-secondary-bg: #1c1917;
+  --btn-secondary-hover: #292524;
+  --btn-secondary-text: #ffffff;
 }
 
 body {
@@ -45,6 +65,30 @@ body {
   color: var(--text-app);
   @apply antialiased transition-colors duration-500;
   font-family: var(--font-sans);
+}
+
+.text-muted {
+  color: var(--muted-text);
+}
+
+.text-app {
+  color: var(--text-app);
+}
+
+.bg-item {
+  background-color: var(--item-bg);
+}
+
+.border-item {
+  border-color: var(--item-bg);
+}
+
+.border-card {
+  border-color: var(--card-border);
+}
+
+.hover-bg-item:hover {
+  background-color: var(--item-hover);
 }
 
 .gold-gradient {
@@ -75,7 +119,8 @@ body {
 
 .nav-blur {
   background-color: var(--nav-bg);
-  @apply backdrop-blur-xl border-t border-white/5 transition-colors duration-500;
+  @apply backdrop-blur-xl border-t transition-colors duration-500;
+  border-color: var(--card-border);
 }
 
 .serif-italic {

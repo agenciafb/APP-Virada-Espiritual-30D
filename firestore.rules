@@ -1,0 +1,201 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{uid}
+    // Fields:
+    //   - id: string (required) - Firebase Auth UID
+    //   - email: string (required) - User email
+    //   - name: string (required) - User name
+    //   - plan: string (optional) - 'free' | 'premium'
+    //   - streak: number (optional) - Current streak
+    //   - progress: number (optional) - Current progress (day 1-30)
+    //   - last_access: string (optional) - ISO date-time
+    //
+    // Collection: /days/{dayId}
+    // Fields:
+    //   - id: number (required) - Day number
+    //   - title: string (required)
+    //   - verse: string (required)
+    //   - reflection: string (required)
+    //   - application: string (required)
+    //   - exercise: string (required)
+    //   - declaration: string (required)
+    //
+    // Collection: /prayers/{prayerId}
+    // Fields:
+    //   - category: string (required)
+    //   - title: string (required)
+    //   - content: string (required)
+    //   - declaration: string (required)
+    //
+    // Collection: /declarations/{declarationId}
+    // Fields:
+    //   - content: string (required)
+    //   - reference: string (required)
+    //
+    // Collection: /users/{uid}/checklists/{date}
+    // Fields:
+    //   - user_id: string (required)
+    //   - date: string (required) - YYYY-MM-DD
+    //   - morning_status: list (optional) - List of strings
+    //   - night_status: list (optional) - List of strings
+    //
+    // Collection: /users/{uid}/diary/{date}
+    // Fields:
+    //   - user_id: string (required)
+    //   - date: string (required) - YYYY-MM-DD
+    //   - gratitude: string (optional)
+    //   - learning: string (optional)
+    //
+    // Collection: /users/{uid}/reflections/{dayId}
+    // Fields:
+    //   - user_id: string (required)
+    //   - day_id: number (required)
+    //   - content: string (optional)
+    //
+    // Collection: /achievements/{achievementId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - description: string (required)
+    //   - icon: string (required)
+    //
+    // Collection: /users/{uid}/achievements/{achievementId}
+    // Fields:
+    //   - user_id: string (required)
+    //   - achievement_id: string (required)
+    //   - earned_at: string (required) - ISO date-time
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ( (request.auth.token.email == "fbassistecjari@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    function isValidDateTimeString(dateTimeStr) {
+      return dateTimeStr is string && dateTimeStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'name']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('plan' in data) || data.plan in ['free', 'premium']) &&
+             (!('streak' in data) || data.streak is int) &&
+             (!('progress' in data) || data.progress is int) &&
+             (!('last_access' in data) || isValidDateTimeString(data.last_access));
+    }
+
+    function isValidChecklist(data) {
+      return data.keys().hasAll(['user_id', 'date']) &&
+             data.user_id is string &&
+             isValidDateString(data.date) &&
+             (!('morning_status' in data) || data.morning_status is list) &&
+             (!('night_status' in data) || data.night_status is list);
+    }
+
+    function isValidDiary(data) {
+      return data.keys().hasAll(['user_id', 'date']) &&
+             data.user_id is string &&
+             isValidDateString(data.date) &&
+             (!('gratitude' in data) || (data.gratitude is string && data.gratitude.size() < 2000)) &&
+             (!('learning' in data) || (data.learning is string && data.learning.size() < 2000));
+    }
+
+    function isValidReflection(data) {
+      return data.keys().hasAll(['user_id', 'day_id']) &&
+             data.user_id is string &&
+             data.day_id is int &&
+             (!('content' in data) || (data.content is string && data.content.size() < 5000));
+    }
+
+    function isValidUserAchievement(data) {
+      return data.keys().hasAll(['user_id', 'achievement_id', 'earned_at']) &&
+             data.user_id is string &&
+             data.achievement_id is string &&
+             isValidDateTimeString(data.earned_at);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data)) || isAdmin();
+
+      match /checklists/{date} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) && isValidChecklist(request.resource.data);
+      }
+
+      match /diary/{date} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) && isValidDiary(request.resource.data);
+      }
+
+      match /reflections/{dayId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) && isValidReflection(request.resource.data);
+      }
+
+      match /achievements/{achievementId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin() || (isOwner(userId) && isValidUserAchievement(request.resource.data));
+      }
+    }
+
+    match /days/{dayId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /prayers/{prayerId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /declarations/{declarationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /achievements/{achievementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

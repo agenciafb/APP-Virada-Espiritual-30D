@@ -16,7 +16,7 @@ const db = new Database("database.db");
 // Initialize Database
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     plan TEXT DEFAULT 'free',
@@ -52,7 +52,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS checklists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     date TEXT NOT NULL,
     morning_status TEXT DEFAULT '[]',
     night_status TEXT DEFAULT '[]',
@@ -63,7 +63,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS diary (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     date TEXT NOT NULL,
     gratitude TEXT,
     learning TEXT,
@@ -73,7 +73,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS day_reflections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     day_id INTEGER NOT NULL,
     content TEXT,
     UNIQUE(user_id, day_id)
@@ -82,7 +82,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     subscription TEXT NOT NULL,
     UNIQUE(user_id, subscription)
   );
@@ -96,7 +96,7 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS user_achievements (
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     achievement_id TEXT NOT NULL,
     earned_at TEXT NOT NULL,
     PRIMARY KEY(user_id, achievement_id)
@@ -273,6 +273,36 @@ async function startServer() {
     }
   });
 
+  app.get("/api/user", (req, res) => {
+    try {
+      const emailParam = (req.query.email as string || "").toLowerCase().trim();
+      if (!emailParam) {
+        return res.status(400).json({ error: "E-mail não fornecido" });
+      }
+
+      const adminEmail = "fbassistecjari@gmail.com";
+      let user = db.prepare("SELECT * FROM users WHERE email = ?").get(emailParam) as any;
+      
+      // Auto-authorize the admin/developer
+      if (!user && emailParam === adminEmail) {
+        db.prepare("INSERT INTO users (email, name) VALUES (?, ?)").run(emailParam, "Admin");
+        user = db.prepare("SELECT * FROM users WHERE email = ?").get(emailParam);
+      }
+      
+      if (!user) {
+        return res.status(403).json({ 
+          error: "Acesso negado. Este e-mail não possui uma compra ativa.",
+          details: "Se você acabou de comprar, aguarde alguns minutos pela liberação."
+        });
+      }
+      
+      res.json(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erro ao verificar usuário" });
+    }
+  });
+
   app.get("/api/user/:email", (req, res) => {
     try {
       const email = req.params.email.toLowerCase().trim();
@@ -391,6 +421,16 @@ async function startServer() {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to update progress" });
+    }
+  });
+
+  app.get("/api/achievements", (req, res) => {
+    try {
+      const achievements = db.prepare("SELECT * FROM achievements").all();
+      res.json(achievements);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch achievements" });
     }
   });
 

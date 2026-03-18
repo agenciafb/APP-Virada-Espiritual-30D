@@ -33,10 +33,88 @@ import {
   PlusSquare,
   MoreVertical,
   Download,
-  X
+  X,
+  Mail
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
+import { 
+  signInWithPopup, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  onAuthStateChanged, 
+  signOut,
+  User as FirebaseUser,
+  GoogleAuthProvider,
+  OAuthProvider
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  onSnapshot,
+  getDocFromServer,
+  Timestamp
+} from 'firebase/firestore';
+import { auth, db, googleProvider, appleProvider } from './firebase';
+
+// --- Types & Enums ---
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string | null;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+};
 
 // --- Components ---
 
@@ -54,23 +132,46 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   render() {
     const { hasError, error } = this.state;
     if (hasError) {
+      let errorMessage = "Ocorreu um erro inesperado. Por favor, tente recarregar o aplicativo.";
+      let isPermissionError = false;
+
+      try {
+        if (error?.message) {
+          const parsedError = JSON.parse(error.message) as FirestoreErrorInfo;
+          if (parsedError.error.includes('insufficient permissions') || parsedError.error.includes('permission-denied')) {
+            errorMessage = `Erro de permissão no Firestore: ${parsedError.operationType} em ${parsedError.path}. Verifique as regras de segurança.`;
+            isPermissionError = true;
+          }
+        }
+      } catch (e) {
+        // Not a JSON error, use default message
+      }
+
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-app">
           <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6">
             <X className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold mb-4 dark:text-white">Ops! Algo deu errado.</h2>
-          <p className="text-zinc-500 dark:text-zinc-400 mb-8 max-w-xs mx-auto">
-            Ocorreu um erro inesperado. Por favor, tente recarregar o aplicativo.
+          <h2 className="text-2xl font-bold mb-4">{isPermissionError ? "Erro de Segurança" : "Ops! Algo deu errado."}</h2>
+          <p className="text-muted mb-8 max-w-xs mx-auto">
+            {errorMessage}
           </p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-8 py-3 bg-gold-500 text-white rounded-full font-bold shadow-lg shadow-gold-500/20"
-          >
-            Recarregar App
-          </button>
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-8 py-3 bg-gold-500 text-white rounded-full font-bold shadow-lg shadow-gold-500/20"
+            >
+              Recarregar App
+            </button>
+            <button 
+              onClick={() => signOut(auth).then(() => window.location.reload())}
+              className="text-sm text-muted hover:text-app transition-colors"
+            >
+              Sair e Tentar Novamente
+            </button>
+          </div>
           {process.env.NODE_ENV === 'development' && (
-            <pre className="mt-8 p-4 bg-zinc-100 dark:bg-zinc-900 rounded text-left text-xs overflow-auto max-w-full text-red-500">
+            <pre className="mt-8 p-4 bg-item rounded text-left text-xs overflow-auto max-w-full text-red-500">
               {error?.toString()}
             </pre>
           )}
@@ -182,16 +283,33 @@ const Button = ({
   disabled?: boolean;
 }) => {
   const variants = {
-    primary: 'bg-zinc-800 hover:bg-zinc-700 text-white',
-    secondary: 'bg-white text-black hover:bg-zinc-200',
-    outline: 'border border-white/20 hover:bg-white/10 text-white',
+    primary: 'hover:opacity-90',
+    secondary: 'hover:opacity-90',
+    outline: 'border hover:opacity-90',
     gold: 'gold-gradient text-white shadow-lg shadow-gold-600/20 hover:opacity-90'
+  };
+
+  const variantStyles = {
+    primary: {
+      backgroundColor: 'var(--btn-primary-bg)',
+      color: 'var(--btn-primary-text)'
+    },
+    secondary: {
+      backgroundColor: 'var(--btn-secondary-bg)',
+      color: 'var(--btn-secondary-text)'
+    },
+    outline: {
+      borderColor: 'var(--card-border)',
+      color: 'var(--text-app)'
+    },
+    gold: {}
   };
 
   return (
     <button 
       onClick={onClick}
       disabled={disabled}
+      style={variantStyles[variant]}
       className={`px-6 py-3 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${className}`}
     >
       {children}
@@ -202,7 +320,7 @@ const Button = ({
 const ProgressBar = ({ current, total }: { current: number; total: number }) => {
   const percentage = Math.min((current / total) * 100, 100);
   return (
-    <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+    <div className="w-full h-2 bg-item rounded-full overflow-hidden">
       <motion.div 
         initial={{ width: 0 }}
         animate={{ width: `${percentage}%` }}
@@ -243,49 +361,49 @@ const InstallGuide = ({ onClose }: { onClose: () => void }) => {
           {/* iOS Section */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-item flex items-center justify-center">
                 <span className="text-xs font-bold">iOS</span>
               </div>
-              <h3 className="text-sm font-bold uppercase tracking-widest opacity-80">iPhone / iPad</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted">iPhone / iPad</h3>
             </div>
-            <ul className="space-y-3 text-sm opacity-60">
+            <ul className="space-y-3 text-sm text-muted">
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">1</div>
-                <p>Abra no <span className="font-bold text-white">Safari</span></p>
+                <p>Abra no <span className="font-bold text-app">Safari</span></p>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">2</div>
-                <p>Toque no ícone de <span className="font-bold text-white">Compartilhar</span> <Share className="w-4 h-4 inline mb-1" /></p>
+                <p>Toque no ícone de <span className="font-bold text-app">Compartilhar</span> <Share className="w-4 h-4 inline mb-1" /></p>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">3</div>
-                <p>Selecione <span className="font-bold text-white">"Adicionar à Tela de Início"</span> <PlusSquare className="w-4 h-4 inline mb-1" /></p>
+                <p>Selecione <span className="font-bold text-app">"Adicionar à Tela de Início"</span> <PlusSquare className="w-4 h-4 inline mb-1" /></p>
               </li>
             </ul>
           </div>
 
-          <div className="h-px bg-white/5" />
+          <div className="h-px bg-item" />
 
           {/* Android Section */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-item flex items-center justify-center">
                 <span className="text-xs font-bold">AND</span>
               </div>
-              <h3 className="text-sm font-bold uppercase tracking-widest opacity-80">Android / Chrome</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted">Android / Chrome</h3>
             </div>
-            <ul className="space-y-3 text-sm opacity-60">
+            <ul className="space-y-3 text-sm text-muted">
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">1</div>
-                <p>Abra no <span className="font-bold text-white">Google Chrome</span></p>
+                <p>Abra no <span className="font-bold text-app">Google Chrome</span></p>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">2</div>
-                <p>Toque nos <span className="font-bold text-white">três pontos</span> <MoreVertical className="w-4 h-4 inline mb-1" /> no topo</p>
+                <p>Toque nos <span className="font-bold text-app">três pontos</span> <MoreVertical className="w-4 h-4 inline mb-1" /> no topo</p>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-gold-500/20 flex items-center justify-center text-[10px] font-bold text-gold-500 mt-0.5">3</div>
-                <p>Toque em <span className="font-bold text-white">"Instalar Aplicativo"</span> <Download className="w-4 h-4 inline mb-1" /></p>
+                <p>Toque em <span className="font-bold text-app">"Instalar Aplicativo"</span> <Download className="w-4 h-4 inline mb-1" /></p>
               </li>
             </ul>
           </div>
@@ -299,12 +417,141 @@ const InstallGuide = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string) => void; theme: 'light' | 'dark'; onToggleTheme: () => void }) => {
+const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (user: FirebaseUser) => void; theme: 'light' | 'dark'; onToggleTheme: () => void }) => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showGuide, setShowGuide] = useState(false);
 
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      // Kiwify verification
+      const verifyRes = await fetch(`/api/user/${encodeURIComponent(email)}`);
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json();
+        throw new Error(errData.error || 'Acesso negado.');
+      }
+
+      let userCredential;
+      if (isSignUp) {
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Create user profile in Firestore
+        const userRef = doc(db, 'users', userCredential.user.uid);
+        await setDoc(userRef, {
+          id: userCredential.user.uid,
+          email: email,
+          name: name || email.split('@')[0],
+          plan: 'free',
+          streak: 0,
+          progress: 0,
+          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+        });
+      } else {
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
+      }
+      onLogin(userCredential.user);
+    } catch (err: any) {
+      console.error(err);
+      let msg = err.message || 'Erro ao autenticar. Verifique seus dados.';
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') msg = 'E-mail ou senha incorretos.';
+      if (err.code === 'auth/email-already-in-use') msg = 'Este e-mail já está em uso.';
+      if (err.code === 'auth/weak-password') msg = 'A senha deve ter pelo menos 6 caracteres.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      if (!user.email) throw new Error('E-mail não retornado pelo Google.');
+
+      // Kiwify verification
+      const verifyRes = await fetch(`/api/user/${encodeURIComponent(user.email)}`);
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json();
+        await signOut(auth);
+        throw new Error(errData.error || 'Acesso negado.');
+      }
+      
+      // Check if user exists in Firestore
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        await setDoc(userRef, {
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+          plan: 'free',
+          streak: 0,
+          progress: 0,
+          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+        });
+      }
+      onLogin(user);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Erro ao entrar com Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await signInWithPopup(auth, appleProvider);
+      const user = result.user;
+
+      if (!user.email) throw new Error('E-mail não retornado pela Apple.');
+
+      // Kiwify verification
+      const verifyRes = await fetch(`/api/user/${encodeURIComponent(user.email)}`);
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json();
+        await signOut(auth);
+        throw new Error(errData.error || 'Acesso negado.');
+      }
+      
+      // Check if user exists in Firestore
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        await setDoc(userRef, {
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+          plan: 'free',
+          streak: 0,
+          progress: 0,
+          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+        });
+      }
+      onLogin(user);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Erro ao entrar com Apple.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col p-8 md:p-12 bg-zinc-950 text-white">
+    <div className="min-h-screen flex flex-col p-8 md:p-12 bg-app">
       <AnimatePresence>
         {showGuide && <InstallGuide onClose={() => setShowGuide(false)} />}
       </AnimatePresence>
@@ -319,12 +566,12 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string)
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setShowGuide(true)}
-            className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors flex items-center gap-2"
+            className="p-3 rounded-full border border-item hover-bg-item transition-colors flex items-center gap-2"
           >
-            <Download className="w-5 h-5 opacity-60" />
-            <span className="text-[10px] uppercase tracking-widest font-bold hidden sm:inline">Instalar</span>
+            <Download className="w-5 h-5 text-muted" />
+            <span className="text-[10px] uppercase tracking-widest font-bold hidden sm:inline text-muted">Instalar</span>
           </button>
-          <button onClick={onToggleTheme} className="p-3 rounded-full border border-white/10 hover:bg-white/5 transition-colors">
+          <button onClick={onToggleTheme} className="p-3 rounded-full border border-item hover-bg-item transition-colors">
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
@@ -334,53 +581,148 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (email: string)
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full space-y-16"
+        className="flex-1 flex flex-col lg:flex-row items-center justify-center max-w-6xl mx-auto w-full gap-12 lg:gap-24"
       >
-        <div className="space-y-6">
-          <h1 className="text-4xl md:text-6xl display-bold leading-[1.1] tracking-tighter">
-            Transforme sua <span className="serif-italic gold-text">essência</span> em 30 dias.
+        <div className="space-y-6 lg:w-1/2 text-center lg:text-left">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl display-bold leading-[1.1] tracking-tighter">
+            {isSignUp ? 'Comece sua' : 'Continue sua'} <span className="serif-italic gold-text">jornada</span>.
           </h1>
-          <p className="text-zinc-400 text-lg md:text-xl max-w-lg leading-relaxed">
-            Uma jornada guiada para renovar sua mente, fortalecer sua fé e viver o propósito extraordinário de Deus.
+          <p className="text-muted text-lg md:text-xl max-w-lg mx-auto lg:mx-0 leading-relaxed">
+            {isSignUp 
+              ? 'Crie sua conta para iniciar os 30 dias de transformação espiritual.' 
+              : 'Uma jornada guiada para renovar sua mente e fortalecer sua fé.'}
           </p>
+          
+          <div className="hidden lg:block pt-8 space-y-4">
+            <div className="flex items-center gap-4 text-muted">
+              <div className="w-12 h-12 rounded-2xl bg-gold-500/10 flex items-center justify-center text-gold-500">
+                <Flame className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-widest text-xs">Transformação Diária</p>
+                <p className="text-[10px] opacity-60">30 dias de foco e renovação</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-muted">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-widest text-xs">Acesso Exclusivo</p>
+                <p className="text-[10px] opacity-60">Conteúdo premium para alunos</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-8">
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-              <label className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 ml-1">Seu Acesso</label>
-              <span className="text-[9px] uppercase tracking-widest opacity-30 mb-1">Acesso exclusivo para compradores</span>
+        <div className="w-full lg:w-[450px] space-y-8 glass-card p-8 md:p-10">
+          <form onSubmit={handleAuth} className="space-y-6">
+            {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted ml-1">Nome Completo</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                  <input 
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome"
+                    className="app-input pl-12"
+                    required={isSignUp}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted ml-1">E-mail</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                <input 
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="app-input pl-12"
+                  required
+                />
+              </div>
             </div>
-            <input 
-              type="email" 
-              placeholder="E-mail usado na compra"
-              className="app-input text-lg"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted ml-1">Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                <input 
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="app-input pl-12"
+                  required
+                />
+              </div>
+            </div>
+
+            {error && (
+              <p className="text-red-500 text-sm ml-1">{error}</p>
+            )}
+
             <Button 
               variant="gold" 
               className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/20"
-              onClick={() => email && onLogin(email)}
+              disabled={loading}
             >
-              Iniciar Minha Jornada
+              {loading ? 'Processando...' : (isSignUp ? 'Criar Conta' : 'Iniciar Minha Jornada')}
             </Button>
-            <p className="text-center text-[10px] opacity-30 uppercase tracking-widest">
-              Comprou agora? O acesso é liberado automaticamente após a aprovação.
-            </p>
-          </div>
-        </div>
+          </form>
 
-        <div className="flex items-center gap-6 py-4 opacity-20">
-          <div className="h-px bg-current flex-1" />
-          <span className="text-[10px] uppercase tracking-[0.3em] font-bold">Conexão Segura</span>
-          <div className="h-px bg-current flex-1" />
+          <div className="relative py-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-card-border"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-bold">
+              <span className="bg-app px-4 text-muted">Ou entre com</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button 
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="flex items-center justify-center gap-3 w-full bg-item border border-card-border rounded-2xl py-4 hover-bg-item transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span className="font-bold text-sm">Google</span>
+            </button>
+
+            <button 
+              onClick={handleAppleLogin}
+              disabled={loading}
+              className="flex items-center justify-center gap-3 w-full bg-item border border-card-border rounded-2xl py-4 hover-bg-item transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M17.05 20.28c-.96.95-2.04 1.78-3.14 1.72-1.13-.05-1.56-.74-2.89-.74-1.34 0-1.83.71-2.89.77-1.07.06-2.13-.81-3.12-1.78-2.01-1.99-3.54-5.63-3.54-8.89 0-5.2 3.38-7.96 6.58-7.96 1.72 0 3.01.63 3.95.63.92 0 2.58-.77 4.62-.57 1.8.16 3.14.81 3.94 1.96-3.41 2.05-2.86 6.11.58 7.52-1.16 2.74-2.99 5.34-4.09 6.34zm-4.33-16.14c0-2.32 1.9-4.14 4.19-4.14.15 2.37-2.03 4.38-4.19 4.14z"/>
+              </svg>
+              <span className="font-bold text-sm">Apple</span>
+            </button>
+          </div>
+
+          <div className="text-center">
+            <button 
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-muted hover:text-app transition-colors"
+            >
+              {isSignUp ? 'Já tem uma conta? Entre aqui' : 'Não tem uma conta? Cadastre-se'}
+            </button>
+          </div>
         </div>
       </motion.div>
 
-      <footer className="mt-auto pt-12 flex justify-between items-end opacity-30">
+      <footer className="mt-auto pt-12 flex justify-between items-end text-muted">
         <div className="text-[10px] uppercase tracking-widest leading-loose">
           © 2026 Virada 30D<br />Edição Premium
         </div>
@@ -430,30 +772,35 @@ const HomePage = ({
       })
       .catch(err => console.error(err));
 
-    // Load mission status
-    fetch(`/api/checklists/${user.id}/${today}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.mission_status) {
-          try {
-            const status = typeof data.mission_status === 'string' ? JSON.parse(data.mission_status) : data.mission_status;
-            if (Object.keys(status).length > 0) {
-              setMission(status);
-            }
-          } catch (e) {
-            console.error("Error parsing mission status", e);
+    // Load mission status from Firestore
+    if (user.id) {
+      const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+      const unsubscribe = onSnapshot(checklistRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.mission_status) {
+            setMission(data.mission_status);
           }
         }
+      }, (error) => {
+        console.error("Error loading mission status", error);
       });
+      return () => unsubscribe();
+    }
   }, [user.progress, user.id, today]);
 
-  const updateMission = (newMission: typeof mission) => {
+  const updateMission = async (newMission: typeof mission) => {
     setMission(newMission);
-    fetch('/api/checklists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.id, date: today, mission_status: newMission })
-    });
+    try {
+      const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+      await setDoc(checklistRef, {
+        user_id: user.id,
+        date: today,
+        mission_status: newMission
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.id}/checklists/${today}`);
+    }
   };
 
   const shareProgress = () => {
@@ -475,11 +822,11 @@ const HomePage = ({
     <div className="min-h-screen pb-32">
       <header className="p-8 flex justify-between items-center">
         <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Bom dia, Deus quer falar com você hoje.</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Bom dia, Deus quer falar com você hoje.</p>
           <h2 className="text-2xl md:text-3xl display-bold">Olá, <span className="serif-italic gold-text">{user.name.split(' ')[0]}</span></h2>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={onToggleTheme} className="p-3 rounded-full border border-zinc-200 dark:border-white/10 glass-card">
+          <button onClick={onToggleTheme} className="p-3 rounded-full border border-item glass-card">
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
@@ -516,7 +863,7 @@ const HomePage = ({
                 className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${
                   mission[item.id as keyof typeof mission] 
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
-                    : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                    : 'bg-item border-item text-muted hover-bg-item'
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -556,7 +903,7 @@ const HomePage = ({
           </div>
           <div className="space-y-2">
             <h4 className="font-bold uppercase tracking-widest text-sm">Inspirar Outros</h4>
-            <p className="text-xs text-white/40 leading-relaxed">Compartilhe sua luz e ajude outros a começarem a virada espiritual.</p>
+            <p className="text-xs text-muted leading-relaxed">Compartilhe sua luz e ajude outros a começarem a virada espiritual.</p>
           </div>
           <button 
             onClick={shareProgress}
@@ -609,21 +956,21 @@ const HomePage = ({
             <div className="absolute -right-2 -top-2 opacity-10 group-hover:scale-110 transition-transform">
               <Flame className="w-16 h-16 text-orange-500" />
             </div>
-            <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">Streak</span>
+            <span className="text-[10px] uppercase tracking-widest font-bold text-muted">Streak</span>
             <div className="flex items-center gap-2">
               <span className="text-2xl display-bold">🔥 {user.streak}</span>
             </div>
-            <span className="text-[10px] opacity-60">Dias com Deus</span>
+            <span className="text-[10px] text-muted">Dias com Deus</span>
           </div>
           <div className="glass-card p-6 flex flex-col gap-2 relative overflow-hidden group">
             <div className="absolute -right-2 -top-2 opacity-10 group-hover:scale-110 transition-transform">
               <Target className="w-16 h-16 text-gold-500" />
             </div>
-            <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">Jornada</span>
+            <span className="text-[10px] uppercase tracking-widest font-bold text-muted">Jornada</span>
             <div className="flex items-center gap-2">
               <span className="text-2xl display-bold">{user.progress}/30</span>
             </div>
-            <span className="text-[10px] opacity-60">Dias Concluídos</span>
+            <span className="text-[10px] text-muted">Dias Concluídos</span>
           </div>
         </div>
 
@@ -632,17 +979,17 @@ const HomePage = ({
           <div className="flex justify-between items-end">
             <div className="space-y-1">
               <span className="text-5xl display-bold">{Math.round(progressPercent)}%</span>
-              <p className="text-xs uppercase tracking-widest opacity-50">Progresso Total</p>
+              <p className="text-xs uppercase tracking-widest text-muted">Progresso Total</p>
             </div>
             <div className="text-right space-y-1">
               <span className="text-2xl display-bold text-gold-500">
                 {user.progress >= 30 ? "Concluído" : `Dia ${user.progress + 1}`}
               </span>
-              <p className="text-[10px] uppercase tracking-widest opacity-50">Status Atual</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted">Status Atual</p>
             </div>
           </div>
           <ProgressBar current={user.progress} total={30} />
-          <div className="flex justify-between text-[10px] uppercase tracking-widest font-bold opacity-40">
+          <div className="flex justify-between text-[10px] uppercase tracking-widest font-bold text-muted">
             <span>Início</span>
             <span>Destino</span>
           </div>
@@ -659,7 +1006,7 @@ const DayDetail = ({
   onBack 
 }: { 
   day: Day; 
-  userId: number;
+  userId: string;
   onComplete: (reflection: string) => void; 
   onBack: () => void;
 }) => {
@@ -667,10 +1014,15 @@ const DayDetail = ({
 
   useEffect(() => {
     if (!userId || !day.id) return;
-    fetch(`/api/reflections/${encodeURIComponent(userId)}/${encodeURIComponent(day.id)}`)
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load reflection'))
-      .then(data => setReflection(data?.content || ''))
-      .catch(err => console.error(err));
+    const reflectionRef = doc(db, 'users', userId, 'reflections', day.id.toString());
+    const unsubscribe = onSnapshot(reflectionRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setReflection(docSnap.data().content || '');
+      }
+    }, (error) => {
+      console.error("Error loading reflection", error);
+    });
+    return () => unsubscribe();
   }, [userId, day.id]);
 
   return (
@@ -681,11 +1033,11 @@ const DayDetail = ({
     >
       <header className="p-6 flex items-center justify-between sticky top-0 z-50 nav-blur">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+          <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Jornada 30D</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Jornada 30D</p>
             <h2 className="text-lg display-bold">Dia {day.id}</h2>
           </div>
         </div>
@@ -696,7 +1048,7 @@ const DayDetail = ({
           <h1 className="text-3xl md:text-5xl display-bold leading-tight gold-text">{day.title}</h1>
           <div className="glass-card p-8 border-l-4 border-l-gold-500 relative overflow-hidden">
             <Quote className="absolute -top-4 -right-4 w-24 h-24 opacity-[0.03] rotate-12" />
-            <p className="serif-italic text-2xl leading-relaxed italic opacity-90">
+            <p className="serif-italic text-2xl leading-relaxed italic">
               "{day.verse}"
             </p>
           </div>
@@ -705,10 +1057,10 @@ const DayDetail = ({
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <BookOpen className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Reflexão Profunda</h3>
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Reflexão Profunda</h3>
           </div>
           <div className="prose prose-zinc dark:prose-invert max-w-none">
-            <p className="text-xl leading-relaxed opacity-80 whitespace-pre-line serif-italic">
+            <p className="text-xl leading-relaxed serif-italic">
               {day.reflection}
             </p>
           </div>
@@ -717,10 +1069,10 @@ const DayDetail = ({
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <Flame className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Aplicação Prática</h3>
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Aplicação Prática</h3>
           </div>
           <div className="glass-card p-8 bg-gold-500/[0.02]">
-            <p className="text-lg leading-relaxed opacity-80">
+            <p className="text-lg leading-relaxed">
               {day.application}
             </p>
           </div>
@@ -729,9 +1081,9 @@ const DayDetail = ({
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <MessageSquare className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Diário de Transformação</h3>
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Diário de Transformação</h3>
           </div>
-          <p className="text-sm opacity-50 italic">{day.exercise}</p>
+          <p className="text-sm text-muted italic">{day.exercise}</p>
           <textarea 
             className="app-input min-h-[200px] resize-none text-lg serif-italic"
             placeholder="O que o Espírito Santo falou ao seu coração hoje?"
@@ -744,7 +1096,7 @@ const DayDetail = ({
           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
             <AudioButton text={day.declaration} />
           </div>
-          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Decreto de Hoje</h3>
+          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Decreto de Hoje</h3>
           <p className="text-2xl display-bold italic">"{day.declaration}"</p>
         </section>
 
@@ -783,7 +1135,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
       className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
-        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h2 className="text-lg display-bold">Orações de Poder</h2>
@@ -800,7 +1152,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
               className="space-y-6"
             >
               <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Socorro Bem Presente</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Socorro Bem Presente</p>
                 <h3 className="text-2xl display-bold">O que você está enfrentando?</h3>
               </div>
               <div className="grid grid-cols-1 gap-4">
@@ -811,7 +1163,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
                     className="glass-card p-6 flex justify-between items-center group"
                   >
                     <span className="text-lg font-medium group-hover:gold-text transition-colors">{cat}</span>
-                    <ChevronRight className="w-5 h-5 opacity-20 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                    <ChevronRight className="w-5 h-5 text-muted/30 group-hover:text-gold-500 group-hover:translate-x-1 transition-all" />
                   </button>
                 ))}
               </div>
@@ -832,7 +1184,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
                 <AudioButton text={selectedPrayer.content} className="mt-2" />
               </div>
 
-              <div className="space-y-6 text-xl leading-relaxed serif-italic opacity-90">
+              <div className="space-y-6 text-xl leading-relaxed serif-italic">
                 {selectedPrayer.content.split('\n').map((p, i) => <p key={i}>{p}</p>)}
               </div>
 
@@ -846,7 +1198,7 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
 
               <Button 
                 variant="outline" 
-                className="w-full py-5 rounded-2xl border-white/10 hover:bg-white/5" 
+                className="w-full py-5 rounded-2xl border-item hover-bg-item" 
                 onClick={() => { setSelectedPrayer(null); }}
               >
                 Escolher outro motivo
@@ -886,7 +1238,7 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
       className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
-        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h2 className="text-lg display-bold">Decretos de Fé</h2>
@@ -894,7 +1246,7 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
 
       <main className="px-6 space-y-8 mt-6">
         <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Ativação Espiritual</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Ativação Espiritual</p>
           <h3 className="text-xl md:text-2xl display-bold">Declare a Palavra</h3>
         </div>
         
@@ -909,9 +1261,9 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
                 <AudioButton text={decl.content} />
                 <button 
                   onClick={() => handleShare(decl)}
-                  className="p-2 bg-zinc-800/50 rounded-full hover:bg-zinc-700 transition-colors"
+                  className="p-2 bg-item rounded-full hover-bg-item transition-colors"
                 >
-                  <Share2 className="w-4 h-4 opacity-40 hover:opacity-100" />
+                  <Share2 className="w-4 h-4 text-muted hover:text-app" />
                 </button>
               </div>
               <Quote className="w-8 h-8 text-gold-500 opacity-20" />
@@ -935,7 +1287,7 @@ const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-12 bg-zinc-950"
+      className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-12 bg-app"
     >
       <div className="relative">
         <motion.div 
@@ -961,15 +1313,15 @@ const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
         ))}
       </div>
 
-      <div className="space-y-6 max-w-md">
-        <h1 className="text-4xl md:text-6xl display-bold gold-text">Vitória!</h1>
-        <p className="text-xl md:text-2xl serif-italic opacity-90">Você concluiu os 30 dias da sua jornada espiritual.</p>
-        <p className="text-zinc-500 leading-relaxed">
+      <div className="space-y-6 max-w-2xl mx-auto text-center">
+        <h1 className="text-4xl md:text-6xl lg:text-7xl display-bold gold-text">Vitória!</h1>
+        <p className="text-xl md:text-2xl lg:text-3xl serif-italic">Você concluiu os 30 dias da sua jornada espiritual.</p>
+        <p className="text-muted text-lg leading-relaxed max-w-lg mx-auto">
           Sua dedicação produziu frutos eternos. Este não é o fim, mas o início de uma nova estação de autoridade e propósito em sua vida.
         </p>
       </div>
 
-      <div className="w-full max-w-sm space-y-6">
+      <div className="w-full max-w-sm mx-auto space-y-6">
         <Button 
           variant="gold" 
           className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/30" 
@@ -977,7 +1329,7 @@ const CongratulationsPage = ({ onBack }: { onBack: () => void }) => {
         >
           Continuar Navegando
         </Button>
-        <div className="space-y-2 opacity-30">
+        <div className="space-y-2 text-muted">
           <p className="serif-italic text-sm">"Combati o bom combate, acabei a carreira, guardei a fé."</p>
           <p className="text-[10px] uppercase tracking-widest font-bold">2 Timóteo 4:7</p>
         </div>
@@ -1070,99 +1422,111 @@ const ProfilePage = ({ user, achievements, onBack, onLogout }: { user: User; ach
       className="min-h-screen pb-32"
     >
       <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
-        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h2 className="text-lg display-bold">Meu Perfil</h2>
       </header>
 
-      <main className="px-6 space-y-12 mt-8">
+      <main className="px-6 space-y-12 mt-8 max-w-4xl mx-auto w-full">
         <div className="flex flex-col items-center text-center space-y-6">
-          <div className="w-32 h-32 rounded-full gold-gradient flex items-center justify-center text-white text-5xl display-bold shadow-2xl shadow-gold-500/20">
+          <div className="w-32 h-32 md:w-40 md:h-40 rounded-full gold-gradient flex items-center justify-center text-white text-5xl md:text-6xl display-bold shadow-2xl shadow-gold-500/20">
             {user.name[0].toUpperCase()}
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl display-bold">{user.name}</h1>
-            <p className="opacity-40 text-sm font-medium tracking-widest uppercase">{user.email}</p>
+            <h1 className="text-2xl md:text-4xl display-bold">{user.name}</h1>
+            <p className="text-muted text-sm md:text-base font-medium tracking-widest uppercase">{user.email}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="glass-card p-8 text-center space-y-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="glass-card p-6 md:p-8 text-center space-y-2">
             <Target className="w-8 h-8 mx-auto text-gold-500 opacity-50" />
             <div className="text-4xl display-bold">{user.progress}</div>
-            <div className="text-[10px] uppercase tracking-widest font-bold opacity-40">Dias Concluídos</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold text-muted">Dias Concluídos</div>
           </div>
-          <div className="glass-card p-8 text-center space-y-2">
+          <div className="glass-card p-6 md:p-8 text-center space-y-2">
             <Flame className="w-8 h-8 mx-auto text-orange-500 opacity-50" />
             <div className="text-4xl display-bold">{user.streak}</div>
-            <div className="text-[10px] uppercase tracking-widest font-bold opacity-40">Dias Seguidos</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold text-muted">Dias Seguidos</div>
+          </div>
+          <div className="glass-card p-6 md:p-8 text-center space-y-2">
+            <Trophy className="w-8 h-8 mx-auto text-gold-500 opacity-50" />
+            <div className="text-4xl display-bold">{achievements.filter(a => a.earned_at).length}</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold text-muted">Conquistas</div>
+          </div>
+          <div className="glass-card p-6 md:p-8 text-center space-y-2">
+            <Calendar className="w-8 h-8 mx-auto text-emerald-500 opacity-50" />
+            <div className="text-4xl display-bold">30</div>
+            <div className="text-[10px] uppercase tracking-widest font-bold text-muted">Meta Total</div>
           </div>
         </div>
 
-        {/* Achievements */}
-        <div className="space-y-6">
-          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40 ml-1">Conquistas</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {achievements.map((achievement) => (
-              <div 
-                key={achievement.id}
-                className={`glass-card p-6 flex flex-col items-center text-center gap-3 transition-all ${
-                  achievement.earned_at ? 'opacity-100' : 'opacity-20 grayscale'
-                }`}
-              >
-                <span className="text-4xl">{achievement.icon}</span>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest leading-tight block">{achievement.title}</span>
-                  {achievement.earned_at && (
-                    <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-tighter">Conquistado</span>
-                  )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Achievements */}
+          <div className="space-y-6">
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted ml-1">Conquistas</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {achievements.map((achievement) => (
+                <div 
+                  key={achievement.id}
+                  className={`glass-card p-6 flex flex-col items-center text-center gap-3 transition-all ${
+                    achievement.earned_at ? 'opacity-100' : 'opacity-40 grayscale'
+                  }`}
+                >
+                  <span className="text-4xl">{achievement.icon}</span>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest leading-tight block">{achievement.title}</span>
+                    {achievement.earned_at && (
+                      <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-tighter">Conquistado</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-6">
-          <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40 ml-1">Configurações</h3>
-          <div className="space-y-3">
-            <button 
-              onClick={subscribeToPush}
-              disabled={pushStatus === 'granted' || loading}
-              className="w-full glass-card p-6 text-left flex items-center justify-between group disabled:opacity-50"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-gold-500/10 flex items-center justify-center text-gold-500">
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
-                </div>
-                <div>
-                  <span className="font-bold uppercase tracking-widest text-sm block">Notificações</span>
-                  <span className="text-[10px] opacity-40 uppercase tracking-widest font-bold">
-                    {pushStatus === 'granted' ? 'Ativadas' : pushStatus === 'denied' ? 'Bloqueadas' : 'Ativar Lembretes'}
-                  </span>
-                </div>
-              </div>
-              {pushStatus !== 'granted' && !loading && <ChevronRight className="w-5 h-5 opacity-20 group-hover:translate-x-1 transition-all" />}
-            </button>
-
-            {pushStatus === 'granted' && (
+          <div className="space-y-6">
+            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted ml-1">Configurações</h3>
+            <div className="space-y-3">
               <button 
-                onClick={sendTestNotification}
-                className="w-full py-4 rounded-2xl border border-white/10 text-white/40 text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all"
+                onClick={subscribeToPush}
+                disabled={pushStatus === 'granted' || loading}
+                className="w-full glass-card p-6 text-left flex items-center justify-between group disabled:opacity-50"
               >
-                Enviar Notificação de Teste
-              </button>
-            )}
-
-            <button onClick={onLogout} className="w-full glass-card p-6 text-left text-red-500 flex items-center justify-between group">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                  <Lock className="w-5 h-5" />
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gold-500/10 flex items-center justify-center text-gold-500">
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <span className="font-bold uppercase tracking-widest text-sm block">Notificações</span>
+                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold">
+                      {pushStatus === 'granted' ? 'Ativadas' : pushStatus === 'denied' ? 'Bloqueadas' : 'Ativar Lembretes'}
+                    </span>
+                  </div>
                 </div>
-                <span className="font-bold uppercase tracking-widest text-sm">Sair da Conta</span>
-              </div>
-              <ChevronRight className="w-5 h-5 opacity-20 group-hover:translate-x-1 transition-all" />
-            </button>
+                {pushStatus !== 'granted' && !loading && <ChevronRight className="w-5 h-5 text-muted group-hover:translate-x-1 transition-all opacity-30" />}
+              </button>
+
+              {pushStatus === 'granted' && (
+                <button 
+                  onClick={sendTestNotification}
+                  className="w-full py-4 rounded-2xl border border-item text-muted text-[10px] font-bold uppercase tracking-widest hover-bg-item transition-all"
+                >
+                  Enviar Notificação de Teste
+                </button>
+              )}
+
+              <button onClick={onLogout} className="w-full glass-card p-6 text-left text-red-500 flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <span className="font-bold uppercase tracking-widest text-sm">Sair da Conta</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted group-hover:translate-x-1 transition-all opacity-30" />
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -1170,30 +1534,38 @@ const ProfilePage = ({ user, achievements, onBack, onLogout }: { user: User; ach
   );
 };
 
-const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void }) => {
+const ChecklistPage = ({ userId, onBack }: { userId: string; onBack: () => void }) => {
   const [morning, setMorning] = useState<string[]>([]);
   const [night, setNight] = useState<string[]>([]);
   const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
   useEffect(() => {
     if (!userId || !today) return;
-    fetch(`/api/checklists/${encodeURIComponent(userId)}/${encodeURIComponent(today)}`)
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load checklist'))
-      .then(data => {
-        if (data) {
-          setMorning(typeof data.morning_status === 'string' ? JSON.parse(data.morning_status || "[]") : (data.morning_status || []));
-          setNight(typeof data.night_status === 'string' ? JSON.parse(data.night_status || "[]") : (data.night_status || []));
-        }
-      })
-      .catch(err => console.error(err));
+    const checklistRef = doc(db, 'users', userId, 'checklists', today);
+    const unsubscribe = onSnapshot(checklistRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMorning(data.morning_status || []);
+        setNight(data.night_status || []);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${userId}/checklists/${today}`);
+    });
+    return () => unsubscribe();
   }, [userId, today]);
 
   const saveChecklist = async (m: string[], n: string[]) => {
-    await fetch('/api/checklists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, date: today, morning_status: m, night_status: n })
-    });
+    try {
+      const checklistRef = doc(db, 'users', userId, 'checklists', today);
+      await setDoc(checklistRef, {
+        user_id: userId,
+        date: today,
+        morning_status: m,
+        night_status: n
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${userId}/checklists/${today}`);
+    }
   };
 
   return (
@@ -1203,85 +1575,87 @@ const ChecklistPage = ({ userId, onBack }: { userId: number; onBack: () => void 
       className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
-        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h2 className="text-lg display-bold">Hábitos de Sucesso</h2>
       </header>
 
-      <main className="px-6 space-y-12 mt-8">
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Consistência Diária</p>
+      <main className="px-6 space-y-12 mt-8 max-w-4xl mx-auto w-full">
+        <div className="space-y-1 text-center md:text-left">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Consistência Diária</p>
           <h3 className="text-xl md:text-2xl display-bold">Sua Rotina Espiritual</h3>
         </div>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <Sun className="w-5 h-5 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Manhã com Deus</h3>
-          </div>
-          <div className="space-y-3">
-            {['Oração ao acordar', 'Leitura da Palavra', 'Afirmações de Fé', 'Gratidão'].map((item) => (
-              <button 
-                key={item}
-                onClick={() => {
-                  const next = morning.includes(item) ? morning.filter(i => i !== item) : [...morning, item];
-                  setMorning(next);
-                  saveChecklist(next, night);
-                }}
-                className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
-                  morning.includes(item)
-                    ? 'bg-gold-500/10 border-gold-500/30 text-gold-500'
-                    : 'bg-white/5 border-white/5 opacity-60'
-                }`}
-              >
-                <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                  morning.includes(item) ? 'bg-gold-500 border-gold-500' : 'border-current opacity-20'
-                }`}>
-                  {morning.includes(item) && <Check className="w-4 h-4 text-white" />}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Sun className="w-5 h-5 text-gold-500" />
+              <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Manhã com Deus</h3>
+            </div>
+            <div className="space-y-3">
+              {['Oração ao acordar', 'Leitura da Palavra', 'Afirmações de Fé', 'Gratidão'].map((item) => (
+                <button 
+                  key={item}
+                  onClick={() => {
+                    const next = morning.includes(item) ? morning.filter(i => i !== item) : [...morning, item];
+                    setMorning(next);
+                    saveChecklist(next, night);
+                  }}
+                  className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
+                    morning.includes(item)
+                      ? 'bg-gold-500/10 border-gold-500/30 text-gold-500'
+                      : 'bg-item border-item text-muted hover-bg-item'
+                  }`}
+                >
+                  <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                    morning.includes(item) ? 'bg-gold-500 border-gold-500' : 'border-card'
+                  }`}>
+                    {morning.includes(item) && <Check className="w-4 h-4 text-white" />}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <Moon className="w-5 h-5 text-blue-400" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Noite de Entrega</h3>
-          </div>
-          <div className="space-y-3">
-            {['Revisão do dia', 'Oração de entrega', 'Diário de gratidão', 'Desconexão digital'].map((item) => (
-              <button 
-                key={item}
-                onClick={() => {
-                  const next = night.includes(item) ? night.filter(i => i !== item) : [...night, item];
-                  setNight(next);
-                  saveChecklist(morning, next);
-                }}
-                className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
-                  night.includes(item)
-                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                    : 'bg-white/5 border-white/5 opacity-60'
-                }`}
-              >
-                <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                  night.includes(item) ? 'bg-blue-500 border-blue-500' : 'border-current opacity-20'
-                }`}>
-                  {night.includes(item) && <Check className="w-4 h-4 text-white" />}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Moon className="w-5 h-5 text-blue-400" />
+              <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Noite de Entrega</h3>
+            </div>
+            <div className="space-y-3">
+              {['Revisão do dia', 'Oração de entrega', 'Diário de gratidão', 'Desconexão digital'].map((item) => (
+                <button 
+                  key={item}
+                  onClick={() => {
+                    const next = night.includes(item) ? night.filter(i => i !== item) : [...night, item];
+                    setNight(next);
+                    saveChecklist(morning, next);
+                  }}
+                  className={`w-full p-6 rounded-2xl border transition-all flex items-center justify-between group ${
+                    night.includes(item)
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                      : 'bg-item border-item text-muted hover-bg-item'
+                  }`}
+                >
+                  <span className="text-sm font-bold uppercase tracking-widest">{item}</span>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                    night.includes(item) ? 'bg-blue-500 border-blue-500' : 'border-card'
+                  }`}>
+                    {night.includes(item) && <Check className="w-4 h-4 text-white" />}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
       </main>
     </motion.div>
   );
 };
 
-const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) => {
+const DiaryPage = ({ userId, onBack }: { userId: string; onBack: () => void }) => {
   const [gratitude, setGratitude] = useState('');
   const [learning, setLearning] = useState('');
   const [saved, setSaved] = useState(false);
@@ -1289,35 +1663,33 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
 
   useEffect(() => {
     if (!userId || !today) return;
-    fetch(`/api/diary/${encodeURIComponent(userId)}/${encodeURIComponent(today)}`)
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load diary'))
-      .then(data => {
-        if (data) {
-          setGratitude(data.gratitude || '');
-          setLearning(data.learning || '');
-        }
-      })
-      .catch(err => console.error(err));
+    const diaryRef = doc(db, 'users', userId, 'diary', today);
+    const unsubscribe = onSnapshot(diaryRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setGratitude(data.gratitude || '');
+        setLearning(data.learning || '');
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${userId}/diary/${today}`);
+    });
+    return () => unsubscribe();
   }, [userId, today]);
 
-  const handleSave = () => {
-    fetch('/api/diary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+  const handleSave = async () => {
+    try {
+      const diaryRef = doc(db, 'users', userId, 'diary', today);
+      await setDoc(diaryRef, {
         user_id: userId,
         date: today,
         gratitude,
         learning
-      })
-    }).then(res => {
-      if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      } else {
-        console.error('Failed to save diary');
-      }
-    }).catch(err => console.error(err));
+      }, { merge: true });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${userId}/diary/${today}`);
+    }
   };
 
   return (
@@ -1327,45 +1699,47 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
       className="min-h-screen pb-12"
     >
       <header className="p-6 flex items-center gap-4 sticky top-0 z-50 nav-blur">
-        <button onClick={onBack} className="p-2 -ml-2 opacity-60 hover:opacity-100 transition-opacity">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h2 className="text-lg display-bold">Diário de Bordo</h2>
       </header>
 
-      <main className="px-6 space-y-12 mt-8">
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Reflexão Diária</p>
+      <main className="px-6 space-y-12 mt-8 max-w-4xl mx-auto w-full">
+        <div className="space-y-1 text-center md:text-left">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Reflexão Diária</p>
           <h3 className="text-xl md:text-2xl display-bold">Sua Jornada com Deus</h3>
         </div>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <Heart className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Gratidão</h3>
-          </div>
-          <p className="text-sm opacity-50 italic">Pelo que você é grato hoje?</p>
-          <textarea 
-            className="app-input min-h-[150px] resize-none text-lg serif-italic"
-            placeholder="Hoje sou grato por..."
-            value={gratitude}
-            onChange={(e) => setGratitude(e.target.value)}
-          />
-        </section>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Heart className="w-4 h-4 text-gold-500" />
+              <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Gratidão</h3>
+            </div>
+            <p className="text-sm text-muted italic">Pelo que você é grato hoje?</p>
+            <textarea 
+              className="app-input min-h-[200px] resize-none text-lg serif-italic"
+              placeholder="Hoje sou grato por..."
+              value={gratitude}
+              onChange={(e) => setGratitude(e.target.value)}
+            />
+          </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <BookOpen className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-40">Aprendizado</h3>
-          </div>
-          <p className="text-sm opacity-50 italic">O que o Senhor te ensinou?</p>
-          <textarea 
-            className="app-input min-h-[150px] resize-none text-lg serif-italic"
-            placeholder="Deus me ensinou que..."
-            value={learning}
-            onChange={(e) => setLearning(e.target.value)}
-          />
-        </section>
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <BookOpen className="w-4 h-4 text-gold-500" />
+              <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Aprendizado</h3>
+            </div>
+            <p className="text-sm text-muted italic">O que o Senhor te ensinou?</p>
+            <textarea 
+              className="app-input min-h-[200px] resize-none text-lg serif-italic"
+              placeholder="Deus me ensinou que..."
+              value={learning}
+              onChange={(e) => setLearning(e.target.value)}
+            />
+          </section>
+        </div>
 
         <Button 
           variant="gold" 
@@ -1393,10 +1767,56 @@ const DiaryPage = ({ userId, onBack }: { userId: number; onBack: () => void }) =
 export default function App() {
   const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile' | 'congratulations'>('login');
   const [user, setUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [achievements, setAchievements] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
+      setFirebaseUser(fUser);
+      if (fUser) {
+        try {
+          const userRef = doc(db, 'users', fUser.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            setUser(userSnap.data() as User);
+            setView('home');
+          } else {
+            // This case should be handled by LoginPage's handleAuth/handleGoogleLogin
+            // but as a fallback, we can create a basic profile
+            const newUser: User = {
+              id: fUser.uid,
+              email: fUser.email || '',
+              name: fUser.displayName || fUser.email?.split('@')[0] || 'Usuário',
+              plan: 'free',
+              streak: 0,
+              progress: 0,
+              last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+            };
+            await setDoc(userRef, newUser);
+            setUser(newUser);
+            setView('home');
+          }
+        } catch (err) {
+          console.error("Error in onAuthStateChanged:", err);
+          handleFirestoreError(err, OperationType.GET, `users/${fUser.uid}`);
+        } finally {
+          setIsAuthReady(true);
+          setLoading(false);
+        }
+      } else {
+        setUser(null);
+        setView('login');
+        setIsAuthReady(true);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -1405,12 +1825,29 @@ export default function App() {
   }, [user]);
 
   const fetchAchievements = async () => {
+    if (!user) return;
     try {
-      const res = await fetch(`/api/user/${user?.id}/achievements`);
-      const data = await res.json();
-      setAchievements(data);
+      // Fetch all achievement definitions from backend
+      const res = await fetch('/api/achievements');
+      const allAchievements = await res.json();
+
+      // Fetch earned achievements from Firestore
+      const earnedRef = collection(db, 'users', user.id, 'achievements');
+      const querySnapshot = await getDocs(earnedRef);
+      const earnedData = querySnapshot.docs.reduce((acc: any, doc) => {
+        acc[doc.id] = doc.data();
+        return acc;
+      }, {});
+
+      // Merge
+      const merged = allAchievements.map((ach: any) => ({
+        ...ach,
+        earned_at: earnedData[ach.id]?.earned_at || null
+      }));
+
+      setAchievements(merged);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching achievements", err);
     }
   };
 
@@ -1419,11 +1856,6 @@ export default function App() {
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('light', savedTheme === 'light');
-    }
-
-    const savedEmail = localStorage.getItem('user_email');
-    if (savedEmail) {
-      handleLogin(savedEmail);
     }
   }, []);
 
@@ -1434,38 +1866,22 @@ export default function App() {
     document.documentElement.classList.toggle('light', newTheme === 'light');
   };
 
-  const handleLogin = async (email: string) => {
-    if (!email) return;
-    setLoading(true);
+  const handleLogin = (fUser: FirebaseUser) => {
+    setFirebaseUser(fUser);
+    // The onAuthStateChanged listener will handle the rest
+  };
+
+  const handleLogout = async () => {
     try {
-      const url = `/api/user/${encodeURIComponent(email)}`;
-      const res = await fetch(url);
-      const contentType = res.headers.get("content-type");
-      
-      if (!res.ok) {
-        if (contentType && contentType.includes("application/json")) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || `Erro ${res.status}`);
-        } else {
-          throw new Error(`Erro de conexão (${res.status}) em ${url}. Verifique seu e-mail ou tente novamente.`);
-        }
-      }
-      
-      if (contentType && contentType.includes("application/json")) {
-        const userData = await res.json();
-        setUser(userData);
-        localStorage.setItem('user_email', email);
-        setView('home');
-      } else {
-        throw new Error("Resposta inválida do servidor. Por favor, recarregue a página.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || "Erro ao entrar. Verifique sua conexão.");
-    } finally {
-      setLoading(false);
+      await signOut(auth);
+      setUser(null);
+      setFirebaseUser(null);
+      setView('login');
+    } catch (err) {
+      console.error('Erro ao sair:', err);
     }
   };
+
 
   const startDay = async (dayId: number) => {
     setLoading(true);
@@ -1493,43 +1909,76 @@ export default function App() {
 
   const completeDay = async (reflection: string) => {
     if (!user || !currentDay) return;
-    
-    const newProgress = Math.max(user.progress, currentDay.id);
-
+    setLoading(true);
     try {
-      // Save reflection
-      const refRes = await fetch('/api/reflections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, day_id: currentDay.id, content: reflection })
+      // Save reflection to Firestore
+      const reflectionRef = doc(db, 'users', user.id, 'reflections', currentDay.id.toString());
+      await setDoc(reflectionRef, {
+        user_id: user.id,
+        day_id: currentDay.id,
+        content: reflection
       });
-      if (!refRes.ok) throw new Error('Failed to save reflection');
 
-      // Update progress
-      const progRes = await fetch('/api/user/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, progress: newProgress })
+      // Update user progress in Firestore
+      const userRef = doc(db, 'users', user.id);
+      const newProgress = Math.max(user.progress, currentDay.id);
+      
+      // Calculate streak (simplified for now)
+      let newStreak = user.streak;
+      const lastAccess = user.last_access ? new Date(user.last_access) : null;
+      const now = new Date();
+      
+      if (lastAccess) {
+        const diffDays = Math.floor((now.getTime() - lastAccess.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 1) {
+          newStreak += 1;
+        } else {
+          newStreak = 1;
+        }
+      } else {
+        newStreak = 1;
+      }
+
+      await updateDoc(userRef, {
+        progress: newProgress,
+        streak: newStreak,
+        last_access: now.toISOString()
       });
-      if (!progRes.ok) throw new Error('Failed to update progress');
-      const progData = await progRes.json();
-      
-      setUser({ ...user, progress: newProgress, streak: progData.streak ?? user.streak });
-      
-      // Re-fetch achievements to show new medals immediately
+
+      // Award achievements in Firestore
+      const thresholds: Record<string, number> = {
+        "streak_3": 3,
+        "streak_7": 7,
+        "streak_15": 15,
+        "streak_30": 30
+      };
+
+      for (const [achId, threshold] of Object.entries(thresholds)) {
+        if (newStreak >= threshold) {
+          const achRef = doc(db, 'users', user.id, 'achievements', achId);
+          await setDoc(achRef, {
+            achievement_id: achId,
+            earned_at: now.toISOString()
+          }, { merge: true });
+        }
+      }
+
+      // Re-fetch achievements
       fetchAchievements();
 
-      if (newProgress === 30) {
+      if (newProgress >= 30) {
         setView('congratulations');
       } else {
         setView('home');
       }
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
+  if (loading && !isAuthReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <motion.div 
@@ -1543,7 +1992,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="max-w-md mx-auto min-h-screen shadow-2xl shadow-black/20 dark:shadow-white/5">
+      <div className="max-w-6xl mx-auto min-h-screen shadow-2xl shadow-black/20 dark:shadow-white/5">
         <AnimatePresence mode="wait">
           {view === 'login' && <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />}
           {view === 'home' && user && (
@@ -1570,16 +2019,12 @@ export default function App() {
           {view === 'checklist' && user && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
           {view === 'diary' && user && <DiaryPage userId={user.id} onBack={() => setView('home')} />}
           {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
-          {view === 'profile' && user && <ProfilePage user={user} achievements={achievements} onBack={() => setView('home')} onLogout={() => {
-            localStorage.removeItem('user_email');
-            setUser(null);
-            setView('login');
-          }} />}
+          {view === 'profile' && user && <ProfilePage user={user} achievements={achievements} onBack={() => setView('home')} onLogout={handleLogout} />}
         </AnimatePresence>
 
         {/* Navigation Bar (only on home) */}
         {['home', 'diary', 'profile'].includes(view) && (
-          <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto nav-blur px-8 py-4 flex justify-between items-center z-20">
+          <nav className="fixed bottom-0 left-0 right-0 max-w-6xl mx-auto nav-blur px-8 py-4 flex justify-between items-center z-20">
             <button 
               onClick={() => setView('home')}
               className={`${view === 'home' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}

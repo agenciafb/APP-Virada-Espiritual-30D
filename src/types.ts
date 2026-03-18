@@ -1,5 +1,5 @@
 export interface User {
-  id: number;
+  id: string;
   email: string;
   name: string;
   plan: 'free' | 'premium';
@@ -33,7 +33,7 @@ export interface Declaration {
 }
 
 export interface Checklist {
-  user_id: number;
+  user_id: string;
   date: string;
   morning_status: string[];
   night_status: string[];
