@@ -785,6 +785,13 @@ const HomePage = ({
           if (data.mission_status) {
             setMission(data.mission_status);
           }
+        } else {
+          setMission({
+            devotional: false,
+            prayer: false,
+            gratitude: false,
+            reflection: false
+          });
         }
       }, (error) => {
         console.error("Error loading mission status", error);
@@ -808,17 +815,18 @@ const HomePage = ({
   };
 
   const shareProgress = () => {
-    const text = `Estou no dia ${user.progress} da minha Virada Espiritual 🙏🔥 Junte-se a mim!`;
-    const url = window.location.href;
+    const text = `✨ Minha Jornada de 30 Dias: Dia ${user.progress}/30 Concluído! 🙏🔥\n\nEstou vivendo uma transformação real na minha vida espiritual. Junte-se a mim nessa Virada! 🚀`;
+    const url = window.location.origin;
     
     if (navigator.share) {
       navigator.share({
         title: 'Virada Espiritual 30D',
         text: text,
         url: url,
-      });
+      }).catch(console.error);
     } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`);
+      const shareText = `${text}\n\n${url}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`);
     }
   };
 
@@ -838,75 +846,114 @@ const HomePage = ({
 
       <main className="px-6 space-y-8">
         {/* Daily Mission */}
-        <section className="glass-card p-8 space-y-6">
+        <section className="glass-card p-8 space-y-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-gold-500" />
               <h3 className="font-bold uppercase tracking-widest text-sm">Missão de Hoje</h3>
             </div>
-            {allDone && (
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full font-bold uppercase tracking-tighter">
-                ✔ Dia Concluído
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+                {Object.values(mission).filter(Boolean).length}/4
               </span>
-            )}
+            </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[
               { id: 'devotional', label: 'Ler o devocional', icon: BookOpen, action: () => onStartDay(user.progress + 1) },
               { id: 'prayer', label: 'Fazer oração guiada', icon: Heart, action: () => onStartDay(user.progress + 1) },
               { id: 'gratitude', label: 'Escrever uma gratidão', icon: Star, action: onOpenDiary },
               { id: 'reflection', label: 'Refletir no diário espiritual', icon: MessageSquare, action: onOpenDiary },
-            ].map((item) => (
-              <div key={item.id} className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const newMission = { ...mission, [item.id]: !mission[item.id as keyof typeof mission] };
-                    updateMission(newMission);
-                  }}
-                  className={`flex-shrink-0 p-5 rounded-2xl border transition-all ${
-                    mission[item.id as keyof typeof mission] 
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
-                      : 'bg-item border-item text-muted hover-bg-item'
+            ].map((item) => {
+              const isDone = mission[item.id as keyof typeof mission];
+              return (
+                <motion.div 
+                  key={item.id} 
+                  layout
+                  className={`flex gap-3 p-1 rounded-2xl border transition-all duration-500 ${
+                    isDone 
+                      ? 'bg-emerald-500/5 border-emerald-500/20' 
+                      : 'bg-item border-item'
                   }`}
                 >
-                  {mission[item.id as keyof typeof mission] ? (
-                    <CheckCircle2 className="w-6 h-6" />
-                  ) : (
-                    <Circle className="w-6 h-6 opacity-20" />
-                  )}
-                </button>
-                <button
-                  onClick={item.action}
-                  className={`flex-grow flex items-center justify-between p-5 rounded-2xl border transition-all ${
-                    mission[item.id as keyof typeof mission] 
-                      ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/70' 
-                      : 'bg-item border-item text-muted hover-bg-item'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <item.icon className="w-5 h-5" />
-                    <span className="text-sm font-bold uppercase tracking-widest">{item.label}</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 opacity-30" />
-                </button>
-              </div>
-            ))}
+                  <button
+                    onClick={() => {
+                      const newMission = { ...mission, [item.id]: !isDone };
+                      updateMission(newMission);
+                    }}
+                    className={`p-4 rounded-xl transition-all duration-300 ${
+                      isDone 
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                        : 'bg-white/5 text-muted hover:bg-white/10'
+                    }`}
+                  >
+                    <motion.div
+                      animate={{ scale: isDone ? [1, 1.2, 1] : 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {isDone ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                    </motion.div>
+                  </button>
+                  <button
+                    onClick={item.action}
+                    className={`flex-grow flex items-center justify-between px-2 py-4 text-left group`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg transition-colors ${isDone ? 'text-emerald-500' : 'text-muted opacity-50'}`}>
+                        <item.icon className="w-5 h-5" />
+                      </div>
+                      <span className={`text-sm font-bold uppercase tracking-widest transition-all duration-500 ${
+                        isDone ? 'text-emerald-500/70 line-through opacity-50' : 'text-app'
+                      }`}>
+                        {item.label}
+                      </span>
+                    </div>
+                    {!isDone && <ArrowRight className="w-4 h-4 opacity-20 group-hover:opacity-50 group-hover:translate-x-1 transition-all" />}
+                  </button>
+                </motion.div>
+              );
+            })}
           </div>
 
-          {user.progress < 30 && allDone && (
+          {allDone && (
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="relative overflow-hidden rounded-3xl p-8 text-center space-y-6 bg-gradient-to-br from-gold-500/20 via-gold-500/5 to-transparent border border-gold-500/30 shadow-2xl shadow-gold-500/10"
             >
-              <Button 
-                variant="gold" 
-                className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/20 flex items-center justify-center gap-3 group"
-                onClick={() => onStartDay(user.progress + 1)}
-              >
-                Iniciar Dia {user.progress + 1}
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                <div className="absolute -top-10 -left-10 w-40 h-40 bg-gold-500/10 blur-3xl rounded-full" />
+                <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-gold-500/10 blur-3xl rounded-full" />
+              </div>
+
+              <div className="relative z-10 space-y-4">
+                <motion.div 
+                  animate={{ 
+                    rotate: [0, -10, 10, -10, 10, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                  className="w-20 h-20 mx-auto rounded-full bg-gold-500 flex items-center justify-center shadow-2xl shadow-gold-500/40"
+                >
+                  <Trophy className="w-10 h-10 text-white" />
+                </motion.div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl display-bold gold-text">Dia Concluído!</h3>
+                  <p className="text-xs text-muted font-bold uppercase tracking-widest">Sua luz brilhou intensamente hoje.</p>
+                </div>
+                
+                {user.progress < 30 && (
+                  <Button 
+                    variant="gold" 
+                    className="w-full py-6 text-xl font-medium shadow-2xl shadow-gold-500/20 flex items-center justify-center gap-3 group mt-4"
+                    onClick={() => onStartDay(user.progress + 1)}
+                  >
+                    Iniciar Dia {user.progress + 1}
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                )}
+              </div>
             </motion.div>
           )}
         </section>
@@ -1698,6 +1745,8 @@ const DiaryPage = ({ userId, onBack, onUpdateMission }: { userId: string; onBack
   }, [userId, today]);
 
   const handleSave = async () => {
+    if (!userId) return;
+    console.log("Saving diary for user:", userId, "date:", today);
     try {
       const diaryRef = doc(db, 'users', userId, 'diary', today);
       await setDoc(diaryRef, {
@@ -1719,8 +1768,10 @@ const DiaryPage = ({ userId, onBack, onUpdateMission }: { userId: string; onBack
       }, { merge: true });
 
       setSaved(true);
+      console.log("Diary saved successfully");
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
+      console.error("Error saving diary:", err);
       handleFirestoreError(err, OperationType.WRITE, `users/${userId}/diary/${today}`);
     }
   };
@@ -1808,37 +1859,50 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
+    let unsubscribeUser: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fUser) => {
       setFirebaseUser(fUser);
+      
+      if (unsubscribeUser) {
+        unsubscribeUser();
+        unsubscribeUser = null;
+      }
+
       if (fUser) {
         try {
           const userRef = doc(db, 'users', fUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            setUser(userSnap.data() as User);
-            setView('home');
-          } else {
-            // This case should be handled by LoginPage's handleAuth/handleGoogleLogin
-            // but as a fallback, we can create a basic profile
-            const newUser: User = {
-              id: fUser.uid,
-              email: fUser.email || '',
-              name: fUser.displayName || fUser.email?.split('@')[0] || 'Usuário',
-              plan: 'free',
-              streak: 0,
-              progress: 0,
-              last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
-            };
-            await setDoc(userRef, newUser);
-            setUser(newUser);
-            setView('home');
-          }
+          
+          // Set up real-time listener for user document
+          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const userData = docSnap.data() as User;
+              setUser(userData);
+              setIsAuthReady(true);
+              setLoading(false);
+              
+              // If we are at login, move to home
+              setView(prev => prev === 'login' ? 'home' : prev);
+            } else {
+              // Create profile if it doesn't exist
+              const newUser: User = {
+                id: fUser.uid,
+                email: fUser.email || '',
+                name: fUser.displayName || fUser.email?.split('@')[0] || 'Usuário',
+                plan: 'free',
+                streak: 0,
+                progress: 0,
+                last_access: new Date().toISOString()
+              };
+              setDoc(userRef, newUser).catch(console.error);
+            }
+          }, (err) => {
+            console.error("Error in user onSnapshot:", err);
+            handleFirestoreError(err, OperationType.GET, `users/${fUser.uid}`);
+          });
+
         } catch (err) {
-          console.error("Error in onAuthStateChanged:", err);
-          handleFirestoreError(err, OperationType.GET, `users/${fUser.uid}`);
-        } finally {
-          setIsAuthReady(true);
-          setLoading(false);
+          console.error("Error in onAuthStateChanged setup:", err);
         }
       } else {
         setUser(null);
@@ -1848,7 +1912,10 @@ export default function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   useEffect(() => {
@@ -1929,6 +1996,20 @@ export default function App() {
         const dayData = await res.json();
         setCurrentDay(dayData);
         setView('day');
+
+        // Mark mission items as started
+        if (user) {
+          const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+          const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+          await setDoc(checklistRef, {
+            user_id: user.id,
+            date: today,
+            mission_status: {
+              devotional: true,
+              prayer: true
+            }
+          }, { merge: true });
+        }
       } else {
         throw new Error("Resposta inválida do servidor.");
       }
@@ -1942,6 +2023,7 @@ export default function App() {
 
   const completeDay = async (reflection: string) => {
     if (!user || !currentDay) return;
+    console.log("Completing day:", currentDay.id, "Current progress:", user.progress);
     setLoading(true);
     try {
       // Save reflection to Firestore
@@ -1955,23 +2037,29 @@ export default function App() {
       // Update user progress in Firestore
       const userRef = doc(db, 'users', user.id);
       const newProgress = Math.max(user.progress, currentDay.id);
+      console.log("New progress will be:", newProgress);
       
-      // Calculate streak (simplified for now)
+      // Calculate streak
       let newStreak = user.streak;
       const lastAccess = user.last_access ? new Date(user.last_access) : null;
       const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const lastAccessStr = lastAccess ? lastAccess.toISOString().split('T')[0] : null;
       
-      if (lastAccess) {
-        const diffDays = Math.floor((now.getTime() - lastAccess.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays <= 1) {
-          newStreak += 1;
+      if (lastAccessStr !== todayStr) {
+        if (lastAccessStr) {
+          const diffDays = Math.floor((now.getTime() - lastAccess.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays <= 1) {
+            newStreak += 1;
+          } else {
+            newStreak = 1;
+          }
         } else {
           newStreak = 1;
         }
-      } else {
-        newStreak = 1;
       }
 
+      console.log("Updating user doc with progress:", newProgress, "streak:", newStreak);
       await updateDoc(userRef, {
         progress: newProgress,
         streak: newStreak,
@@ -2011,12 +2099,14 @@ export default function App() {
       // Re-fetch achievements
       fetchAchievements();
 
+      console.log("Day completion successful. Navigating...");
       if (newProgress >= 30) {
         setView('congratulations');
       } else {
         setView('home');
       }
     } catch (err) {
+      console.error("Error in completeDay:", err);
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
     } finally {
       setLoading(false);
