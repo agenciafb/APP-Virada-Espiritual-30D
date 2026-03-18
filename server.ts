@@ -333,6 +333,15 @@ async function startServer() {
   // Webhook para Kiwify
   app.post("/api/webhook/kiwify", (req, res) => {
     try {
+      // Verificação de segurança (Token secreto configurado no Kiwify e no .env)
+      const kiwifyToken = process.env.KIWIFY_TOKEN;
+      const receivedToken = req.query.token || req.headers['x-kiwify-signature'];
+
+      if (kiwifyToken && receivedToken !== kiwifyToken) {
+        console.warn("Tentativa de acesso não autorizado ao Webhook Kiwify.");
+        return res.status(401).send("Unauthorized");
+      }
+
       const { order_status, customer } = req.body;
 
       // Log para debug (opcional)

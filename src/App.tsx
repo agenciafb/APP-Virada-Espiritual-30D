@@ -740,6 +740,8 @@ const HomePage = ({
   onOpenCrisis, 
   onOpenChecklist, 
   onOpenDeclarations,
+  onOpenProfile,
+  onOpenDiary,
   theme,
   onToggleTheme
 }: { 
@@ -748,6 +750,8 @@ const HomePage = ({
   onOpenCrisis: () => void;
   onOpenChecklist: () => void;
   onOpenDeclarations: () => void;
+  onOpenProfile: () => void;
+  onOpenDiary: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }) => {
@@ -849,33 +853,44 @@ const HomePage = ({
 
           <div className="space-y-4">
             {[
-              { id: 'devotional', label: 'Ler o devocional', icon: BookOpen },
-              { id: 'prayer', label: 'Fazer oração guiada', icon: Heart },
-              { id: 'gratitude', label: 'Escrever uma gratidão', icon: Star },
-              { id: 'reflection', label: 'Refletir no diário espiritual', icon: MessageSquare },
+              { id: 'devotional', label: 'Ler o devocional', icon: BookOpen, action: () => onStartDay(user.progress + 1) },
+              { id: 'prayer', label: 'Fazer oração guiada', icon: Heart, action: () => onStartDay(user.progress + 1) },
+              { id: 'gratitude', label: 'Escrever uma gratidão', icon: Star, action: onOpenDiary },
+              { id: 'reflection', label: 'Refletir no diário espiritual', icon: MessageSquare, action: onOpenDiary },
             ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  const newMission = { ...mission, [item.id]: !mission[item.id as keyof typeof mission] };
-                  updateMission(newMission);
-                }}
-                className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${
-                  mission[item.id as keyof typeof mission] 
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
-                    : 'bg-item border-item text-muted hover-bg-item'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-sm font-bold uppercase tracking-widest">{item.label}</span>
-                </div>
-                {mission[item.id as keyof typeof mission] ? (
-                  <CheckCircle2 className="w-6 h-6" />
-                ) : (
-                  <Circle className="w-6 h-6 opacity-20" />
-                )}
-              </button>
+              <div key={item.id} className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const newMission = { ...mission, [item.id]: !mission[item.id as keyof typeof mission] };
+                    updateMission(newMission);
+                  }}
+                  className={`flex-shrink-0 p-5 rounded-2xl border transition-all ${
+                    mission[item.id as keyof typeof mission] 
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
+                      : 'bg-item border-item text-muted hover-bg-item'
+                  }`}
+                >
+                  {mission[item.id as keyof typeof mission] ? (
+                    <CheckCircle2 className="w-6 h-6" />
+                  ) : (
+                    <Circle className="w-6 h-6 opacity-20" />
+                  )}
+                </button>
+                <button
+                  onClick={item.action}
+                  className={`flex-grow flex items-center justify-between p-5 rounded-2xl border transition-all ${
+                    mission[item.id as keyof typeof mission] 
+                      ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/70' 
+                      : 'bg-item border-item text-muted hover-bg-item'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <item.icon className="w-5 h-5" />
+                    <span className="text-sm font-bold uppercase tracking-widest">{item.label}</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 opacity-30" />
+                </button>
+              </div>
             ))}
           </div>
 
@@ -952,7 +967,10 @@ const HomePage = ({
 
         {/* Stats Cards - MOVED TO BOTTOM */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="glass-card p-6 flex flex-col gap-2 relative overflow-hidden group">
+          <button 
+            onClick={onOpenProfile}
+            className="glass-card p-6 flex flex-col gap-2 relative overflow-hidden group text-left"
+          >
             <div className="absolute -right-2 -top-2 opacity-10 group-hover:scale-110 transition-transform">
               <Flame className="w-16 h-16 text-orange-500" />
             </div>
@@ -961,8 +979,11 @@ const HomePage = ({
               <span className="text-2xl display-bold">🔥 {user.streak}</span>
             </div>
             <span className="text-[10px] text-muted">Dias com Deus</span>
-          </div>
-          <div className="glass-card p-6 flex flex-col gap-2 relative overflow-hidden group">
+          </button>
+          <button 
+            onClick={onOpenProfile}
+            className="glass-card p-6 flex flex-col gap-2 relative overflow-hidden group text-left"
+          >
             <div className="absolute -right-2 -top-2 opacity-10 group-hover:scale-110 transition-transform">
               <Target className="w-16 h-16 text-gold-500" />
             </div>
@@ -971,7 +992,7 @@ const HomePage = ({
               <span className="text-2xl display-bold">{user.progress}/30</span>
             </div>
             <span className="text-[10px] text-muted">Dias Concluídos</span>
-          </div>
+          </button>
         </div>
 
         {/* Progress Bar - MOVED TO BOTTOM */}
@@ -1655,7 +1676,7 @@ const ChecklistPage = ({ userId, onBack }: { userId: string; onBack: () => void 
   );
 };
 
-const DiaryPage = ({ userId, onBack }: { userId: string; onBack: () => void }) => {
+const DiaryPage = ({ userId, onBack, onUpdateMission }: { userId: string; onBack: () => void; onUpdateMission?: (mission: any) => void }) => {
   const [gratitude, setGratitude] = useState('');
   const [learning, setLearning] = useState('');
   const [saved, setSaved] = useState(false);
@@ -1685,6 +1706,18 @@ const DiaryPage = ({ userId, onBack }: { userId: string; onBack: () => void }) =
         gratitude,
         learning
       }, { merge: true });
+
+      // Update mission status for today
+      const checklistRef = doc(db, 'users', userId, 'checklists', today);
+      await setDoc(checklistRef, {
+        user_id: userId,
+        date: today,
+        mission_status: {
+          gratitude: true,
+          reflection: true
+        }
+      }, { merge: true });
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -1945,6 +1978,18 @@ export default function App() {
         last_access: now.toISOString()
       });
 
+      // Update mission status for today
+      const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+      await setDoc(checklistRef, {
+        user_id: user.id,
+        date: today,
+        mission_status: {
+          devotional: true,
+          prayer: true
+        }
+      }, { merge: true });
+
       // Award achievements in Firestore
       const thresholds: Record<string, number> = {
         "streak_3": 3,
@@ -2002,6 +2047,8 @@ export default function App() {
               onOpenCrisis={() => setView('crisis')}
               onOpenChecklist={() => setView('checklist')}
               onOpenDeclarations={() => setView('declarations')} 
+              onOpenProfile={() => setView('profile')}
+              onOpenDiary={() => setView('diary')}
               theme={theme}
               onToggleTheme={toggleTheme}
             />
@@ -2017,31 +2064,36 @@ export default function App() {
           {view === 'crisis' && <CrisisMode onBack={() => setView('home')} />}
           {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
           {view === 'checklist' && user && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
-          {view === 'diary' && user && <DiaryPage userId={user.id} onBack={() => setView('home')} />}
+          {view === 'diary' && user && (
+            <DiaryPage 
+              userId={user.id} 
+              onBack={() => setView('home')} 
+            />
+          )}
           {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
           {view === 'profile' && user && <ProfilePage user={user} achievements={achievements} onBack={() => setView('home')} onLogout={handleLogout} />}
         </AnimatePresence>
 
-        {/* Navigation Bar (only on home) */}
-        {['home', 'diary', 'profile'].includes(view) && (
+        {/* Navigation Bar */}
+        {['home', 'diary', 'profile', 'checklist', 'declarations', 'crisis'].includes(view) && (
           <nav className="fixed bottom-0 left-0 right-0 max-w-6xl mx-auto nav-blur px-8 py-4 flex justify-between items-center z-20">
             <button 
               onClick={() => setView('home')}
-              className={`${view === 'home' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+              className={`${view === 'home' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1 transition-all hover:scale-110`}
             >
               <Calendar className="w-6 h-6" />
               <span className="text-[10px] font-bold uppercase">Jornada</span>
             </button>
             <button 
               onClick={() => setView('diary')}
-              className={`${view === 'diary' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+              className={`${view === 'diary' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1 transition-all hover:scale-110`}
             >
               <BookOpen className="w-6 h-6" />
               <span className="text-[10px] font-bold uppercase">Diário</span>
             </button>
             <button 
               onClick={() => setView('profile')}
-              className={`${view === 'profile' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1`}
+              className={`${view === 'profile' ? 'text-gold-500' : 'opacity-40'} flex flex-col items-center gap-1 transition-all hover:scale-110`}
             >
               <UserIcon className="w-6 h-6" />
               <span className="text-[10px] font-bold uppercase">Perfil</span>
