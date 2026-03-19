@@ -433,10 +433,22 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (user: Firebase
     try {
       // Kiwify verification
       const verifyRes = await fetch(`/api/user/${encodeURIComponent(email)}`);
+      const contentType = verifyRes.headers.get("content-type");
+      
       if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        throw new Error(errData.error || 'Acesso negado.');
+        if (contentType && contentType.includes("application/json")) {
+          const errData = await verifyRes.json();
+          throw new Error(errData.error || 'Acesso negado.');
+        } else {
+          throw new Error(`Erro no servidor (${verifyRes.status}).`);
+        }
       }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Resposta inválida do servidor (não é JSON).");
+      }
+
+      const userData = await verifyRes.json();
 
       let userCredential;
       if (isSignUp) {
@@ -479,11 +491,25 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (user: Firebase
 
       // Kiwify verification
       const verifyRes = await fetch(`/api/user/${encodeURIComponent(user.email)}`);
+      const contentType = verifyRes.headers.get("content-type");
+
       if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        await signOut(auth);
-        throw new Error(errData.error || 'Acesso negado.');
+        if (contentType && contentType.includes("application/json")) {
+          const errData = await verifyRes.json();
+          await signOut(auth);
+          throw new Error(errData.error || 'Acesso negado.');
+        } else {
+          await signOut(auth);
+          throw new Error(`Erro no servidor (${verifyRes.status}).`);
+        }
       }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        await signOut(auth);
+        throw new Error("Resposta inválida do servidor (não é JSON).");
+      }
+
+      const userData = await verifyRes.json();
       
       // Check if user exists in Firestore
       const userRef = doc(db, 'users', user.uid);
@@ -520,11 +546,25 @@ const LoginPage = ({ onLogin, theme, onToggleTheme }: { onLogin: (user: Firebase
 
       // Kiwify verification
       const verifyRes = await fetch(`/api/user/${encodeURIComponent(user.email)}`);
+      const contentType = verifyRes.headers.get("content-type");
+
       if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        await signOut(auth);
-        throw new Error(errData.error || 'Acesso negado.');
+        if (contentType && contentType.includes("application/json")) {
+          const errData = await verifyRes.json();
+          await signOut(auth);
+          throw new Error(errData.error || 'Acesso negado.');
+        } else {
+          await signOut(auth);
+          throw new Error(`Erro no servidor (${verifyRes.status}).`);
+        }
       }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        await signOut(auth);
+        throw new Error("Resposta inválida do servidor (não é JSON).");
+      }
+
+      const userData = await verifyRes.json();
       
       // Check if user exists in Firestore
       const userRef = doc(db, 'users', user.uid);
@@ -772,7 +812,13 @@ const HomePage = ({
 
   useEffect(() => {
     fetch('/api/declarations')
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load declarations'))
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        throw new Error(`Failed to load declarations (${res.status})`);
+      })
       .then(data => {
         const currentDayDecl = data.find((d: any) => d.id === (user.progress + 1)) || data[0];
         setDailyDeclaration(currentDayDecl);
@@ -1226,7 +1272,13 @@ const CrisisMode = ({ onBack }: { onBack: () => void }) => {
 
   useEffect(() => {
     fetch('/api/prayers')
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load prayers'))
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        throw new Error(`Failed to load prayers (${res.status})`);
+      })
       .then(data => setPrayers(data || []))
       .catch(err => console.error(err));
   }, []);
@@ -1323,7 +1375,13 @@ const DeclarationsPage = ({ onBack }: { onBack: () => void }) => {
 
   useEffect(() => {
     fetch('/api/declarations')
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load declarations'))
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        throw new Error(`Failed to load declarations (${res.status})`);
+      })
       .then(data => setDeclarations(data || []))
       .catch(err => console.error(err));
   }, []);
@@ -1479,6 +1537,10 @@ const ProfilePage = ({ user, achievements, onBack, onLogout }: { user: User; ach
       await navigator.serviceWorker.ready;
 
       const res = await fetch('/api/push/vapid-public-key');
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+        throw new Error(`Failed to fetch VAPID key: ${res.status}`);
+      }
       const { publicKey } = await res.json();
 
       if (!publicKey) {
@@ -1513,7 +1575,8 @@ const ProfilePage = ({ user, achievements, onBack, onLogout }: { user: User; ach
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id })
       });
-      if (res.ok) {
+      const contentType = res.headers.get("content-type");
+      if (res.ok && contentType && contentType.includes("application/json")) {
         alert('Notificação de teste enviada! Verifique seu dispositivo.');
       } else {
         alert('Erro ao enviar teste. Você está inscrito?');
@@ -2001,7 +2064,10 @@ export default function App() {
     try {
       // Fetch all achievement definitions from backend
       const res = await fetch('/api/achievements');
-      if (!res.ok) throw new Error(`Failed to fetch definitions: ${res.status}`);
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+        throw new Error(`Failed to fetch definitions: ${res.status}`);
+      }
       const allAchievements = await res.json();
       console.log("[Achievements] Definitions loaded:", allAchievements.length);
 
@@ -2077,28 +2143,26 @@ export default function App() {
       const res = await fetch(url);
       const contentType = res.headers.get("content-type");
 
-      if (!res.ok) throw new Error(`Falha ao carregar o dia (${res.status}) em ${url}`);
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+        throw new Error(`Falha ao carregar o dia (${res.status}) em ${url}`);
+      }
       
-      if (contentType && contentType.includes("application/json")) {
-        const dayData = await res.json();
-        setCurrentDay(dayData);
-        setView('day');
+      const dayData = await res.json();
+      setCurrentDay(dayData);
+      setView('day');
 
-        // Mark mission items as started
-        if (user) {
-          const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-          const checklistRef = doc(db, 'users', user.id, 'checklists', today);
-          await setDoc(checklistRef, {
-            user_id: user.id,
-            date: today,
-            mission_status: {
-              devotional: true,
-              prayer: true
-            }
-          }, { merge: true });
-        }
-      } else {
-        throw new Error("Resposta inválida do servidor.");
+      // Mark mission items as started
+      if (user) {
+        const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        const checklistRef = doc(db, 'users', user.id, 'checklists', today);
+        await setDoc(checklistRef, {
+          user_id: user.id,
+          date: today,
+          mission_status: {
+            devotional: true,
+            prayer: true
+          }
+        }, { merge: true });
       }
     } catch (err: any) {
       console.error(err);
@@ -2181,7 +2245,7 @@ export default function App() {
 
       // Sync with backend SQLite
       try {
-        await fetch('/api/user/progress', {
+        const res = await fetch('/api/user/progress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2190,7 +2254,12 @@ export default function App() {
             newProgress
           })
         });
-        console.log("[Progress] Backend sync successful");
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          console.log("[Progress] Backend sync successful");
+        } else {
+          console.warn("[Progress] Backend sync returned non-JSON or error:", res.status);
+        }
       } catch (err) {
         console.error("[Progress] Backend sync failed:", err);
       }
