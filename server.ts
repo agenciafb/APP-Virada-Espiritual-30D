@@ -209,6 +209,7 @@ if (achievementCount.count === 0) {
 
 async function startServer() {
   const app = express();
+  app.set('trust proxy', 1); // Trust Vercel/Cloud Run proxies
   app.use(express.json());
 
   // Logging middleware for API routes
