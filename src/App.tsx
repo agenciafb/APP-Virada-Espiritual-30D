@@ -34,7 +34,11 @@ import {
   MoreVertical,
   Download,
   X,
-  Mail
+  Mail,
+  ShieldCheck,
+  Users,
+  Pause,
+  WifiOff
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -59,7 +63,10 @@ import {
   getDocs, 
   onSnapshot,
   getDocFromServer,
-  Timestamp
+  Timestamp,
+  orderBy,
+  limit,
+  addDoc
 } from 'firebase/firestore';
 import { auth, db, googleProvider, appleProvider } from './firebase';
 
@@ -115,6 +122,17 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 };
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if(error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. The client is offline.");
+    }
+  }
+}
+testConnection();
 
 // --- Components ---
 
@@ -181,6 +199,18 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
     return (this as any).props.children;
   }
 }
+
+const OfflineBanner = () => (
+  <motion.div 
+    initial={{ height: 0, opacity: 0 }}
+    animate={{ height: 'auto', opacity: 1 }}
+    exit={{ height: 0, opacity: 0 }}
+    className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-[0.2em] py-2 text-center sticky top-0 z-[100] flex items-center justify-center gap-2"
+  >
+    <WifiOff className="w-3 h-3" />
+    Você está offline. Alterações serão sincronizadas quando voltar.
+  </motion.div>
+);
 
 const AudioButton = ({ text, className = "" }: { text: string; className?: string }) => {
   const [loading, setLoading] = useState(false);
@@ -262,7 +292,7 @@ const AudioButton = ({ text, className = "" }: { text: string; className?: strin
     <button 
       onClick={handleToggle}
       className={`p-2 rounded-full transition-all ${playing ? 'bg-red-500 text-white' : 'bg-gold-500/10 text-gold-500 hover:bg-gold-500/20'} ${className}`}
-      disabled={loading}
+      disabled={loading || !navigator.onLine}
     >
       {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : playing ? <X className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
     </button>
@@ -466,15 +496,19 @@ const LoginPage = ({ onLogin, theme, onToggleTheme, deferredPrompt, onInstall }:
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         // Create user profile in Firestore
         const userRef = doc(db, 'users', userCredential.user.uid);
-        await setDoc(userRef, {
-          id: userCredential.user.uid,
-          email: email,
-          name: name || email.split('@')[0],
-          plan: 'free',
-          streak: 0,
-          progress: 0,
-          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
-        });
+        try {
+          await setDoc(userRef, {
+            id: userCredential.user.uid,
+            email: email,
+            name: name || email.split('@')[0],
+            plan: 'free',
+            streak: 0,
+            progress: 0,
+            last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${userCredential.user.uid}`);
+        }
       } else {
         userCredential = await signInWithEmailAndPassword(auth, email, password);
       }
@@ -524,18 +558,27 @@ const LoginPage = ({ onLogin, theme, onToggleTheme, deferredPrompt, onInstall }:
       
       // Check if user exists in Firestore
       const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+      let userSnap;
+      try {
+        userSnap = await getDoc(userRef);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+      }
       
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
-          plan: 'free',
-          streak: 0,
-          progress: 0,
-          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
-        });
+      if (!userSnap?.exists()) {
+        try {
+          await setDoc(userRef, {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+            plan: 'free',
+            streak: 0,
+            progress: 0,
+            last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+        }
       }
       onLogin(user);
     } catch (err: any) {
@@ -579,18 +622,27 @@ const LoginPage = ({ onLogin, theme, onToggleTheme, deferredPrompt, onInstall }:
       
       // Check if user exists in Firestore
       const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+      let userSnap;
+      try {
+        userSnap = await getDoc(userRef);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+      }
       
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
-          plan: 'free',
-          streak: 0,
-          progress: 0,
-          last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
-        });
+      if (!userSnap?.exists()) {
+        try {
+          await setDoc(userRef, {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+            plan: 'free',
+            streak: 0,
+            progress: 0,
+            last_access: new Timestamp(Math.floor(Date.now() / 1000), 0).toDate().toISOString()
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+        }
       }
       onLogin(user);
     } catch (err: any) {
@@ -785,18 +837,53 @@ const LoginPage = ({ onLogin, theme, onToggleTheme, deferredPrompt, onInstall }:
   );
 };
 
+const DAILY_PHRASES = [
+  "Confie no processo, Deus está no controle.",
+  "O seu milagre está mais perto do que você imagina.",
+  "Não temas, pois Eu sou contigo.",
+  "A sua fé moverá montanhas hoje.",
+  "Descanse no Senhor e Ele agirá.",
+  "Grandes coisas estão por vir.",
+  "Você é precioso aos olhos do Pai.",
+  "A paz de Deus excede todo entendimento.",
+  "Sua força vem do alto.",
+  "Deus tem um plano perfeito para sua vida.",
+  "Nada é impossível para aquele que crê.",
+  "O choro pode durar uma noite, mas a alegria vem pela manhã.",
+  "Seja forte e corajoso.",
+  "Deus é o seu refúgio e fortaleza.",
+  "A graça de Deus te basta.",
+  "O Senhor é o seu pastor e nada lhe faltará.",
+  "Tudo coopera para o bem daqueles que amam a Deus.",
+  "Deus ouve a sua oração em segredo.",
+  "Sua história ainda não terminou.",
+  "O amor de Deus por você é infinito.",
+  "Espere no Senhor com paciência.",
+  "Deus renova as suas forças hoje.",
+  "A luz de Cristo brilha em você.",
+  "Você foi escolhido para este tempo.",
+  "Deus está preparando algo novo.",
+  "A vitória é certa em nome de Jesus.",
+  "Deus cuida de cada detalhe do seu dia.",
+  "Sua fé é o seu maior escudo.",
+  "O Senhor te abençoe e te guarde.",
+  "Hoje é dia de ver a glória de Deus."
+];
+
 const HomePage = ({ 
   user, 
   onStartDay, 
   onOpenCrisis, 
   onOpenChecklist, 
-  onOpenDeclarations,
-  onOpenProfile,
+  onOpenDeclarations, 
+  onOpenProfile, 
   onOpenDiary,
+  onOpenAdmin,
   theme,
   onToggleTheme,
   deferredPrompt,
-  onInstall
+  onInstall,
+  isOnline
 }: { 
   user: User; 
   onStartDay: (dayId: number) => void;
@@ -805,10 +892,12 @@ const HomePage = ({
   onOpenDeclarations: () => void;
   onOpenProfile: () => void;
   onOpenDiary: () => void;
+  onOpenAdmin: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   deferredPrompt: any;
   onInstall: () => void;
+  isOnline: boolean;
 }) => {
   const [dailyDeclaration, setDailyDeclaration] = useState<Declaration | null>(null);
   const [mission, setMission] = useState({
@@ -822,6 +911,14 @@ const HomePage = ({
   const progressPercent = (user.progress / 30) * 100;
   
   const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  
+  // Use day of the month to pick a phrase (1-31)
+  const dayOfMonth = now.getDate();
+  const phraseIndex = (dayOfMonth - 1) % DAILY_PHRASES.length;
+  const dailyPhrase = DAILY_PHRASES[phraseIndex];
+
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const isDayCompletedToday = user.last_completion_date === today;
 
@@ -858,7 +955,7 @@ const HomePage = ({
           });
         }
       }, (error) => {
-        console.error("Error loading mission status", error);
+        handleFirestoreError(error, OperationType.GET, `users/${user.id}/checklists/${today}`);
       });
       return () => unsubscribe();
     }
@@ -904,10 +1001,27 @@ const HomePage = ({
 
       <header className="p-8 flex justify-between items-center">
         <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Bom dia, Deus quer falar com você hoje.</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">
+            {greeting}, {dailyPhrase}
+          </p>
           <h2 className="text-2xl md:text-3xl display-bold">Olá, <span className="serif-italic gold-text">{user.name.split(' ')[0]}</span></h2>
         </div>
         <div className="flex items-center gap-2">
+          {!isOnline && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+              <WifiOff className="w-3 h-3" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Offline</span>
+            </div>
+          )}
+          {user.email === 'fbassistecjari@gmail.com' && (
+            <button 
+              onClick={onOpenAdmin} 
+              className="p-3 rounded-full border border-gold-500/30 glass-card text-gold-500 hover:bg-gold-500/10 transition-colors"
+              title="Painel Admin"
+            >
+              <ShieldCheck className="w-5 h-5" />
+            </button>
+          )}
           <button 
             onClick={() => deferredPrompt ? onInstall() : setShowInstallGuide(true)}
             className="p-3 rounded-full border border-item glass-card flex items-center gap-2"
@@ -1188,7 +1302,7 @@ const DayDetail = ({
         setReflection(docSnap.data().content || '');
       }
     }, (error) => {
-      console.error("Error loading reflection", error);
+      handleFirestoreError(error, OperationType.GET, `users/${userId}/reflections/${day.id}`);
     });
     return () => unsubscribe();
   }, [userId, day.id]);
@@ -1223,9 +1337,12 @@ const DayDetail = ({
         </div>
 
         <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <BookOpen className="w-4 h-4 text-gold-500" />
-            <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Reflexão Profunda</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BookOpen className="w-4 h-4 text-gold-500" />
+              <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-muted">Reflexão Profunda</h3>
+            </div>
+            <AudioPlayer text={day.reflection} />
           </div>
           <div className="prose prose-zinc dark:prose-invert max-w-none">
             <p className="text-xl leading-relaxed serif-italic">
@@ -1996,8 +2113,162 @@ const DiaryPage = ({ userId, onBack, onUpdateMission }: { userId: string; onBack
   );
 };
 
+const AudioPlayer = ({ text }: { text: string }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+
+  const generateAndPlay = async () => {
+    if (audioUrl) {
+      if (isPlaying) {
+        audio?.pause();
+        setIsPlaying(false);
+      } else {
+        audio?.play();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Leia com uma voz calma, inspiradora e espiritual: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const url = `data:audio/mp3;base64,${base64Audio}`;
+        const newAudio = new Audio(url);
+        newAudio.onended = () => setIsPlaying(false);
+        setAudioUrl(url);
+        setAudio(newAudio);
+        newAudio.play();
+        setIsPlaying(true);
+      }
+    } catch (err) {
+      console.error("Error generating audio:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button 
+      onClick={generateAndPlay}
+      disabled={loading || !navigator.onLine}
+      className="flex items-center gap-2 px-4 py-2 rounded-full gold-gradient text-white text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-gold-500/20 disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : isPlaying ? <Pause className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+      {loading ? 'Gerando...' : isPlaying ? 'Pausar' : !navigator.onLine ? 'Offline' : 'Ouvir'}
+    </button>
+  );
+};
+
+const AdminPage = ({ onBack }: { onBack: () => void }) => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const q = query(collection(db, 'users'), orderBy('progress', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUsers(usersData);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen p-6 space-y-8 max-w-6xl mx-auto w-full">
+      <header className="flex items-center gap-4 sticky top-0 z-50 nav-blur py-4">
+        <button onClick={onBack} className="p-2 -ml-2 text-muted hover:text-app transition-colors">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-lg display-bold">Painel Administrativo</h2>
+      </header>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="glass-card p-8 text-center space-y-2">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted">Total de Almas</p>
+          <p className="text-4xl display-bold gold-text">{users.length}</p>
+        </div>
+        <div className="glass-card p-8 text-center space-y-2">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted">Média de Progresso</p>
+          <p className="text-4xl display-bold gold-text">
+            {users.length > 0 ? (users.reduce((acc, u) => acc + (u.progress || 0), 0) / users.length).toFixed(1) : 0}
+          </p>
+        </div>
+        <div className="glass-card p-8 text-center space-y-2">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted">Média de Streak</p>
+          <p className="text-4xl display-bold gold-text">
+            {users.length > 0 ? (users.reduce((acc, u) => acc + (u.streak || 0), 0) / users.length).toFixed(1) : 0}
+          </p>
+        </div>
+      </div>
+
+      <div className="glass-card overflow-x-auto">
+        <table className="w-full text-left min-w-[600px]">
+          <thead className="bg-item border-b border-card-border">
+            <tr>
+              <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-muted">Usuário</th>
+              <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-muted">Progresso</th>
+              <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-muted">Streak</th>
+              <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-muted">Último Acesso</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-card-border">
+            {users.map(u => (
+              <tr key={u.id} className="hover:bg-item transition-colors">
+                <td className="p-6">
+                  <p className="font-bold text-sm">{u.name}</p>
+                  <p className="text-[10px] text-muted">{u.email}</p>
+                </td>
+                <td className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-2 bg-card rounded-full overflow-hidden">
+                      <div className="h-full bg-gold-500" style={{ width: `${(u.progress / 30) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-bold">{u.progress}/30</span>
+                  </div>
+                </td>
+                <td className="p-6">
+                  <div className="flex items-center gap-2 text-gold-500">
+                    <Flame className="w-4 h-4" />
+                    <span className="font-bold">{u.streak || 0}</span>
+                  </div>
+                </td>
+                <td className="p-6 text-xs text-muted">
+                  {u.last_access ? new Date(u.last_access).toLocaleDateString() : 'N/A'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </motion.div>
+  );
+};
+
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile' | 'congratulations'>('login');
+  const [view, setView] = useState<'login' | 'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile' | 'congratulations' | 'admin'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
@@ -2006,6 +2277,20 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -2066,7 +2351,7 @@ export default function App() {
                 last_access: new Date().toISOString(),
                 last_completion_date: ''
               };
-              setDoc(userRef, newUser).catch(console.error);
+              setDoc(userRef, newUser).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${fUser.uid}`));
             }
           }, (err) => {
             console.error("Error in user onSnapshot:", err);
@@ -2111,11 +2396,16 @@ export default function App() {
 
       // Fetch earned achievements from Firestore
       const earnedRef = collection(db, 'users', user.id, 'achievements');
-      const querySnapshot = await getDocs(earnedRef);
-      const earnedData = querySnapshot.docs.reduce((acc: any, doc) => {
+      let querySnapshot;
+      try {
+        querySnapshot = await getDocs(earnedRef);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, `users/${user.id}/achievements`);
+      }
+      const earnedData = querySnapshot?.docs.reduce((acc: any, doc) => {
         acc[doc.id] = doc.data();
         return acc;
-      }, {});
+      }, {}) || {};
       console.log("[Achievements] Earned data loaded:", Object.keys(earnedData).length);
 
       // Merge
@@ -2168,11 +2458,18 @@ export default function App() {
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       
-      // If user is trying to start the NEXT day, check if they already completed a day today
       if (dayId > user.progress && user.last_completion_date === todayStr) {
         alert("Você já completou a missão de hoje! A próxima missão estará disponível amanhã após as 00:00hs.");
         return;
       }
+    }
+
+    // Check cache first
+    const cachedDay = localStorage.getItem(`day_${dayId}`);
+    if (!navigator.onLine && cachedDay) {
+      setCurrentDay(JSON.parse(cachedDay));
+      setView('day');
+      return;
     }
 
     setLoading(true);
@@ -2186,25 +2483,37 @@ export default function App() {
       }
       
       const dayData = await res.json();
+      
+      // Save to cache
+      localStorage.setItem(`day_${dayId}`, JSON.stringify(dayData));
+      
       setCurrentDay(dayData);
       setView('day');
 
-      // Mark mission items as started
       if (user) {
         const today = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         const checklistRef = doc(db, 'users', user.id, 'checklists', today);
-        await setDoc(checklistRef, {
-          user_id: user.id,
-          date: today,
-          mission_status: {
-            devotional: true,
-            prayer: true
-          }
-        }, { merge: true });
+        try {
+          await setDoc(checklistRef, {
+            user_id: user.id,
+            date: today,
+            mission_status: {
+              devotional: true,
+              prayer: true
+            }
+          }, { merge: true });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${user.id}/checklists/${today}`);
+        }
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Erro ao carregar o dia. Tente novamente.");
+      if (cachedDay) {
+        setCurrentDay(JSON.parse(cachedDay));
+        setView('day');
+      } else {
+        alert(err.message || "Erro ao carregar o dia. Tente novamente.");
+      }
     } finally {
       setLoading(false);
     }
@@ -2217,11 +2526,15 @@ export default function App() {
     try {
       // Save reflection to Firestore
       const reflectionRef = doc(db, 'users', user.id, 'reflections', currentDay.id.toString());
-      await setDoc(reflectionRef, {
-        user_id: user.id,
-        day_id: currentDay.id,
-        content: reflection
-      });
+      try {
+        await setDoc(reflectionRef, {
+          user_id: user.id,
+          day_id: currentDay.id,
+          content: reflection
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.id}/reflections/${currentDay.id}`);
+      }
 
       // Update user progress in Firestore
       const userRef = doc(db, 'users', user.id);
@@ -2260,12 +2573,16 @@ export default function App() {
       }
 
       console.log("[Progress] Updating Firestore with progress:", newProgress, "streak:", newStreak);
-      await updateDoc(userRef, {
-        progress: newProgress,
-        streak: newStreak,
-        last_access: now.toISOString(),
-        last_completion_date: todayStr
-      });
+      try {
+        await updateDoc(userRef, {
+          progress: newProgress,
+          streak: newStreak,
+          last_access: now.toISOString(),
+          last_completion_date: todayStr
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+      }
 
       // Sync with backend SQLite
       try {
@@ -2290,14 +2607,18 @@ export default function App() {
 
       // Update mission status for today
       const checklistRef = doc(db, 'users', user.id, 'checklists', todayStr);
-      await setDoc(checklistRef, {
-        user_id: user.id,
-        date: todayStr,
-        mission_status: {
-          devotional: true,
-          prayer: true
-        }
-      }, { merge: true });
+      try {
+        await setDoc(checklistRef, {
+          user_id: user.id,
+          date: todayStr,
+          mission_status: {
+            devotional: true,
+            prayer: true
+          }
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.id}/checklists/${todayStr}`);
+      }
 
       // Award achievements in Firestore
       const thresholds: Record<string, number> = {
@@ -2318,11 +2639,15 @@ export default function App() {
         if ((newStreak >= threshold || isProgress30) && !alreadyEarned) {
           console.log("[Achievements] Awarding:", achId);
           const achRef = doc(db, 'users', user.id, 'achievements', achId);
-          await setDoc(achRef, {
-            user_id: user.id,
-            achievement_id: achId,
-            earned_at: now.toISOString()
-          }, { merge: true });
+          try {
+            await setDoc(achRef, {
+              user_id: user.id,
+              achievement_id: achId,
+              earned_at: now.toISOString()
+            }, { merge: true });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `users/${user.id}/achievements/${achId}`);
+          }
         }
       }
 
@@ -2358,6 +2683,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="max-w-6xl mx-auto min-h-screen shadow-2xl shadow-black/20 dark:shadow-white/5">
+        <AnimatePresence>
+          {!isOnline && <OfflineBanner />}
+        </AnimatePresence>
         <AnimatePresence mode="wait">
           {view === 'login' && <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} deferredPrompt={deferredPrompt} onInstall={handleInstall} />}
           {view === 'home' && user && (
@@ -2369,10 +2697,12 @@ export default function App() {
               onOpenDeclarations={() => setView('declarations')} 
               onOpenProfile={() => setView('profile')}
               onOpenDiary={() => setView('diary')}
+              onOpenAdmin={() => setView('admin')}
               theme={theme}
               onToggleTheme={toggleTheme}
               deferredPrompt={deferredPrompt}
               onInstall={handleInstall}
+              isOnline={isOnline}
             />
           )}
           {view === 'day' && currentDay && user && (
@@ -2392,6 +2722,7 @@ export default function App() {
               onBack={() => setView('home')} 
             />
           )}
+          {view === 'admin' && <AdminPage onBack={() => setView('home')} />}
           {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
           {view === 'profile' && user && <ProfilePage user={user} achievements={achievements} onBack={() => setView('home')} onLogout={handleLogout} deferredPrompt={deferredPrompt} onInstall={handleInstall} />}
         </AnimatePresence>

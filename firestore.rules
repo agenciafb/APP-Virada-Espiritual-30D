@@ -6,70 +6,48 @@ service cloud.firestore {
     // Assumed Data Model
     // ===============================================================
     //
-    // Collection: /users/{uid}
-    // Fields:
-    //   - id: string (required) - Firebase Auth UID
-    //   - email: string (required) - User email
-    //   - name: string (required) - User name
-    //   - plan: string (optional) - 'free' | 'premium'
-    //   - streak: number (optional) - Current streak
-    //   - progress: number (optional) - Current progress (day 1-30)
-    //   - last_access: string (optional) - ISO date-time
-    //
-    // Collection: /days/{dayId}
-    // Fields:
-    //   - id: number (required) - Day number
-    //   - title: string (required)
-    //   - verse: string (required)
-    //   - reflection: string (required)
-    //   - application: string (required)
-    //   - exercise: string (required)
-    //   - declaration: string (required)
-    //
-    // Collection: /prayers/{prayerId}
-    // Fields:
-    //   - category: string (required)
-    //   - title: string (required)
-    //   - content: string (required)
-    //   - declaration: string (required)
-    //
-    // Collection: /declarations/{declarationId}
-    // Fields:
-    //   - content: string (required)
-    //   - reference: string (required)
-    //
-    // Collection: /users/{uid}/checklists/{date}
-    // Fields:
-    //   - user_id: string (required)
-    //   - date: string (required) - YYYY-MM-DD
-    //   - morning_status: list (optional) - List of strings
-    //   - night_status: list (optional) - List of strings
-    //
-    // Collection: /users/{uid}/diary/{date}
-    // Fields:
-    //   - user_id: string (required)
-    //   - date: string (required) - YYYY-MM-DD
-    //   - gratitude: string (optional)
-    //   - learning: string (optional)
-    //
-    // Collection: /users/{uid}/reflections/{dayId}
-    // Fields:
-    //   - user_id: string (required)
-    //   - day_id: number (required)
-    //   - content: string (optional)
-    //
-    // Collection: /achievements/{achievementId}
+    // Collection: users
+    // Document ID: {userId} (matches auth.uid)
     // Fields:
     //   - id: string (required)
-    //   - title: string (required)
-    //   - description: string (required)
-    //   - icon: string (required)
+    //   - email: string (required, email format)
+    //   - name: string (required)
+    //   - plan: string (enum: ['free', 'premium'])
+    //   - streak: int (non-negative)
+    //   - progress: int (non-negative)
+    //   - last_access: string (ISO 8601)
+    //   - last_completion_date: string (ISO 8601 date)
     //
-    // Collection: /users/{uid}/achievements/{achievementId}
+    // Collection: users/{userId}/checklists
+    // Document ID: {date} (YYYY-MM-DD)
+    // Fields:
+    //   - user_id: string (required)
+    //   - date: string (required, date format)
+    //   - morning_status: list (strings)
+    //   - night_status: list (strings)
+    //   - mission_status: map
+    //
+    // Collection: users/{userId}/diary
+    // Document ID: {date} (YYYY-MM-DD)
+    // Fields:
+    //   - user_id: string (required)
+    //   - date: string (required, date format)
+    //   - gratitude: string (max 1000 chars)
+    //   - learning: string (max 1000 chars)
+    //
+    // Collection: users/{userId}/reflections
+    // Document ID: {dayId} (string)
+    // Fields:
+    //   - user_id: string (required)
+    //   - day_id: int (required)
+    //   - content: string (max 2000 chars)
+    //
+    // Collection: users/{userId}/achievements
+    // Document ID: {achievementId}
     // Fields:
     //   - user_id: string (required)
     //   - achievement_id: string (required)
-    //   - earned_at: string (required) - ISO date-time
+    //   - earned_at: string (ISO 8601)
     //
     // ===============================================================
 
@@ -85,22 +63,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        ( (request.auth.token.email == "fbassistecjari@gmail.com" && request.auth.token.email_verified == true) ||
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') );
-    }
-
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     function isValidDateString(dateStr) {
-      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*$");
     }
 
-    function isValidDateTimeString(dateTimeStr) {
-      return dateTimeStr is string && dateTimeStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "fbassistecjari@gmail.com" && request.auth.token.email_verified == true));
     }
 
     // ===============================================================
@@ -109,45 +83,35 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'email', 'name']) &&
-             data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
-             data.email is string && isValidEmail(data.email) && data.email.size() < 256 &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             isValidEmail(data.email) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             (!('plan' in data) || (data.plan in ['free', 'premium'])) &&
-             (!('streak' in data) || data.streak is int) &&
-             (!('progress' in data) || data.progress is int) &&
-             (!('last_access' in data) || isValidDateTimeString(data.last_access)) &&
-             (!('role' in data) || (data.role in ['user', 'admin']));
+             (!('plan' in data) || data.plan in ['free', 'premium']) &&
+             (!('streak' in data) || data.streak is int && data.streak >= 0) &&
+             (!('progress' in data) || data.progress is int && data.progress >= 0);
     }
 
     function isValidChecklist(data) {
       return data.keys().hasAll(['user_id', 'date']) &&
-             data.user_id is string && data.user_id.size() < 128 &&
+             data.user_id is string &&
              isValidDateString(data.date) &&
-             (!('morning_status' in data) || (data.morning_status is list && data.morning_status.size() < 20)) &&
-             (!('night_status' in data) || (data.night_status is list && data.night_status.size() < 20)) &&
-             (!('mission_status' in data) || (data.mission_status is map && data.mission_status.keys().size() < 20));
+             (!('morning_status' in data) || data.morning_status is list) &&
+             (!('night_status' in data) || data.night_status is list);
     }
 
     function isValidDiary(data) {
       return data.keys().hasAll(['user_id', 'date']) &&
-             data.user_id is string && data.user_id.size() < 128 &&
+             data.user_id is string &&
              isValidDateString(data.date) &&
-             (!('gratitude' in data) || (data.gratitude is string && data.gratitude.size() < 2000)) &&
-             (!('learning' in data) || (data.learning is string && data.learning.size() < 2000));
+             (!('gratitude' in data) || data.gratitude is string && data.gratitude.size() < 1000) &&
+             (!('learning' in data) || data.learning is string && data.learning.size() < 1000);
     }
 
     function isValidReflection(data) {
       return data.keys().hasAll(['user_id', 'day_id']) &&
-             data.user_id is string && data.user_id.size() < 128 &&
+             data.user_id is string &&
              data.day_id is int &&
-             (!('content' in data) || (data.content is string && data.content.size() < 5000));
-    }
-
-    function isValidUserAchievement(data) {
-      return data.keys().hasAll(['user_id', 'achievement_id', 'earned_at']) &&
-             data.user_id is string && data.user_id.size() < 128 &&
-             data.achievement_id is string && data.achievement_id.size() < 128 &&
-             isValidDateTimeString(data.earned_at);
+             (!('content' in data) || data.content is string && data.content.size() < 2000);
     }
 
     // ===============================================================
@@ -156,14 +120,11 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
-                      !('role' in request.resource.data) && // Users cannot set their own role
-                      (!('plan' in request.resource.data) || request.resource.data.plan == 'free'); // Default to free
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+                      request.resource.data.email == resource.data.email; // Email immutable
       
-      allow update: if (isAdmin() && isValidUser(request.resource.data)) || 
-                      (isOwner(userId) && isValidUser(request.resource.data) && 
-                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'plan', 'email', 'id']))); // Owner cannot change these fields
-
       match /checklists/{date} {
         allow read: if isOwner(userId) || isAdmin();
         allow write: if isOwner(userId) && isValidChecklist(request.resource.data);
@@ -179,30 +140,16 @@ service cloud.firestore {
         allow write: if isOwner(userId) && isValidReflection(request.resource.data);
       }
 
-      match /achievements/{achievementId} {
+      match /achievements/{achId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isAdmin() || (isOwner(userId) && isValidUserAchievement(request.resource.data));
+        allow create: if isOwner(userId);
+        allow update: if false; // Achievements are immutable
       }
     }
 
-    match /days/{dayId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /prayers/{prayerId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /declarations/{declarationId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /achievements/{achievementId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
     }
   }
 }

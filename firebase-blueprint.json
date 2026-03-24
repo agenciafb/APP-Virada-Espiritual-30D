@@ -5,70 +5,33 @@
       "description": "User profile and progress",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "id": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "name": { "type": "string" },
         "plan": { "type": "string", "enum": ["free", "premium"] },
         "streak": { "type": "integer" },
         "progress": { "type": "integer" },
-        "last_access": { "type": "string", "format": "date-time" }
+        "last_access": { "type": "string", "format": "date-time" },
+        "last_completion_date": { "type": "string", "format": "date" }
       },
       "required": ["id", "email", "name"]
     },
-    "Day": {
-      "title": "Day",
-      "description": "Content for each of the 30 days",
-      "type": "object",
-      "properties": {
-        "id": { "type": "integer" },
-        "title": { "type": "string" },
-        "verse": { "type": "string" },
-        "reflection": { "type": "string" },
-        "application": { "type": "string" },
-        "exercise": { "type": "string" },
-        "declaration": { "type": "string" }
-      },
-      "required": ["id", "title", "verse", "reflection", "application", "exercise", "declaration"]
-    },
-    "Prayer": {
-      "title": "Prayer",
-      "description": "Prayer for crisis mode",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "category": { "type": "string" },
-        "title": { "type": "string" },
-        "content": { "type": "string" },
-        "declaration": { "type": "string" }
-      },
-      "required": ["category", "title", "content", "declaration"]
-    },
-    "Declaration": {
-      "title": "Declaration",
-      "description": "Spiritual declaration",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "content": { "type": "string" },
-        "reference": { "type": "string" }
-      },
-      "required": ["content", "reference"]
-    },
     "Checklist": {
       "title": "Checklist",
-      "description": "Daily habits checklist",
+      "description": "Daily habit checklist for a user",
       "type": "object",
       "properties": {
         "user_id": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "morning_status": { "type": "array", "items": { "type": "string" } },
-        "night_status": { "type": "array", "items": { "type": "string" } }
+        "night_status": { "type": "array", "items": { "type": "string" } },
+        "mission_status": { "type": "object" }
       },
       "required": ["user_id", "date"]
     },
-    "Diary": {
-      "title": "Diary",
-      "description": "Daily diary entry",
+    "DiaryEntry": {
+      "title": "DiaryEntry",
+      "description": "Daily journal entry",
       "type": "object",
       "properties": {
         "user_id": { "type": "string" },
@@ -80,7 +43,7 @@
     },
     "Reflection": {
       "title": "Reflection",
-      "description": "User reflection for a specific day",
+      "description": "User reflection on a specific day's content",
       "type": "object",
       "properties": {
         "user_id": { "type": "string" },
@@ -91,19 +54,7 @@
     },
     "Achievement": {
       "title": "Achievement",
-      "description": "Available achievement",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "icon": { "type": "string" }
-      },
-      "required": ["id", "title", "description", "icon"]
-    },
-    "UserAchievement": {
-      "title": "UserAchievement",
-      "description": "Achievement earned by a user",
+      "description": "Earned achievement for a user",
       "type": "object",
       "properties": {
         "user_id": { "type": "string" },
@@ -114,41 +65,25 @@
     }
   },
   "firestore": {
-    "/users/{uid}": {
+    "/users/{userId}": {
       "schema": "User",
-      "description": "User profile and progress"
+      "description": "User profiles"
     },
-    "/days/{dayId}": {
-      "schema": "Day",
-      "description": "Content for each day"
-    },
-    "/prayers/{prayerId}": {
-      "schema": "Prayer",
-      "description": "Prayers for crisis mode"
-    },
-    "/declarations/{declarationId}": {
-      "schema": "Declaration",
-      "description": "Spiritual declarations"
-    },
-    "/users/{uid}/checklists/{date}": {
+    "/users/{userId}/checklists/{date}": {
       "schema": "Checklist",
-      "description": "User daily habits"
+      "description": "User daily checklists"
     },
-    "/users/{uid}/diary/{date}": {
-      "schema": "Diary",
-      "description": "User daily diary"
+    "/users/{userId}/diary/{date}": {
+      "schema": "DiaryEntry",
+      "description": "User diary entries"
     },
-    "/users/{uid}/reflections/{dayId}": {
+    "/users/{userId}/reflections/{dayId}": {
       "schema": "Reflection",
-      "description": "User daily reflections"
+      "description": "User reflections on daily content"
     },
-    "/achievements/{achievementId}": {
+    "/users/{userId}/achievements/{achievementId}": {
       "schema": "Achievement",
-      "description": "Global achievements"
-    },
-    "/users/{uid}/achievements/{achievementId}": {
-      "schema": "UserAchievement",
-      "description": "Achievements earned by user"
+      "description": "User earned achievements"
     }
   }
 }
