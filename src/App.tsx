@@ -40,12 +40,21 @@ import {
   Trash2,
   Pause,
   WifiOff,
-  Settings
+  Settings,
+  Mail,
+  Apple,
+  Clock
 } from 'lucide-react';
 import { User, Day, Prayer, Checklist, Declaration } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { 
-  User as FirebaseUser
+  User as FirebaseUser,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { 
   doc, 
@@ -63,7 +72,7 @@ import {
   limit,
   addDoc
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, googleProvider, appleProvider } from './firebase';
 
 // --- Types & Enums ---
 
@@ -966,6 +975,29 @@ const DayDetail = ({
   onBack: () => void;
 }) => {
   const [reflection, setReflection] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Dia ${day.id}: ${day.title}`,
+      text: `"${day.verse}"\n\nEstou em uma jornada de 30 dias com Deus. Junte-se a mim!`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareData.title}\n\n${shareData.text}\n\n${shareData.url}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Error sharing:', err);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!userId || userId === 'guest' || !day.id) return;
@@ -1001,8 +1033,17 @@ const DayDetail = ({
       <main className="px-6 space-y-12 mt-8">
         <div className="space-y-6">
           <h1 className="text-3xl md:text-5xl display-bold leading-tight gold-text">{day.title}</h1>
-          <div className="glass-card p-8 border-l-4 border-l-gold-500 relative overflow-hidden">
+          <div className="glass-card p-8 border-l-4 border-l-gold-500 relative overflow-hidden group">
             <Quote className="absolute -top-4 -right-4 w-24 h-24 opacity-[0.03] rotate-12" />
+            <motion.button 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleShare}
+              className="absolute top-4 right-4 p-3 rounded-full gold-gradient text-white shadow-lg shadow-gold-500/20 z-10 transition-all"
+              title="Compartilhar Versículo"
+            >
+              {copied ? <Check className="w-5 h-5" /> : <Share className="w-5 h-5" />}
+            </motion.button>
             <p className="serif-italic text-2xl leading-relaxed italic">
               "{day.verse}"
             </p>
@@ -2159,24 +2200,330 @@ const AdminPage = ({ onBack, currentUser }: { onBack: () => void, currentUser: U
   );
 };
 
+const PendingAccess = ({ firebaseUser, onLogout }: { firebaseUser: FirebaseUser, onLogout: () => void }) => {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-8 bg-app">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="space-y-6 max-w-sm w-full glass-card p-8"
+      >
+        <div className="w-20 h-20 mx-auto bg-amber-500/20 rounded-full flex items-center justify-center">
+          <Clock className="w-10 h-10 text-amber-500" />
+        </div>
+        
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-white">Acesso Pendente</h2>
+          <p className="text-muted text-sm">
+            Olá, <span className="text-white font-medium">{firebaseUser.email}</span>. 
+            Seu acesso ainda não foi liberado em nosso sistema.
+          </p>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-left space-y-3">
+          <p className="text-[10px] text-muted uppercase tracking-widest font-bold">O que aconteceu?</p>
+          <p className="text-xs leading-relaxed">
+            O acesso é liberado automaticamente após a confirmação do pagamento pelo Kiwify. 
+            Isso geralmente leva alguns minutos.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full py-3 rounded-xl gold-gradient text-white font-bold shadow-lg shadow-gold-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            Já paguei, verificar novamente
+          </button>
+          
+          <button 
+            onClick={onLogout}
+            className="w-full py-3 rounded-xl bg-white/5 text-muted font-bold hover:bg-white/10 transition-all text-sm"
+          >
+            Sair e entrar com outro e-mail
+          </button>
+        </div>
+
+        <p className="text-[10px] text-muted">
+          Dúvidas? Entre em contato com o suporte.
+        </p>
+      </motion.div>
+    </div>
+  );
+};
+
+const LoginView = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError("Falha ao entrar com Google. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await signInWithPopup(auth, appleProvider);
+    } catch (err: any) {
+      console.error("Apple login error:", err);
+      setError("Falha ao entrar com Apple. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Preencha todos os campos.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (isRegistering) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err: any) {
+      console.error("Email auth error:", err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError("E-mail ou senha incorretos.");
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError("Este e-mail já está em uso.");
+      } else if (err.code === 'auth/weak-password') {
+        setError("A senha deve ter pelo menos 6 caracteres.");
+      } else {
+        setError("Ocorreu um erro. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Preencha seu e-mail.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setSuccess("E-mail de redefinição enviado com sucesso!");
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      if (err.code === 'auth/user-not-found') {
+        setError("E-mail não encontrado.");
+      } else {
+        setError("Erro ao enviar e-mail. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-8 bg-app">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="space-y-6 max-w-sm w-full"
+      >
+        <div className="w-24 h-24 mx-auto gold-gradient rounded-3xl flex items-center justify-center shadow-2xl shadow-gold-500/20">
+          <Flame className="w-12 h-12 text-white" />
+        </div>
+        
+        <div className="space-y-2">
+          <h1 className="text-3xl display-bold gold-text">30 Dias com Deus</h1>
+          <p className="text-muted text-sm px-4">
+            Uma jornada de transformação espiritual e renovação da mente.
+          </p>
+        </div>
+
+        <div className="glass-card p-8 space-y-6">
+          <p className="text-xs uppercase tracking-widest font-bold text-muted">
+            {isForgotPassword ? 'Redefinir Senha' : (isRegistering ? 'Criar sua conta' : 'Acesse sua Jornada')}
+          </p>
+          
+          {isForgotPassword ? (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted opacity-40" />
+                <input 
+                  type="email"
+                  placeholder="Seu e-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-gold-500/50 outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+              
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 rounded-xl gold-gradient text-white font-bold shadow-lg shadow-gold-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Link'}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="text-xs text-gold-500 font-bold hover:underline"
+              >
+                Voltar para o login
+              </button>
+            </form>
+          ) : (
+            <>
+              <form onSubmit={handleEmailAuth} className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted opacity-40" />
+                  <input 
+                    type="email"
+                    placeholder="Seu e-mail"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-gold-500/50 outline-none transition-all text-sm"
+                    required
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted opacity-40" />
+                  <input 
+                    type="password"
+                    placeholder="Sua senha"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-gold-500/50 outline-none transition-all text-sm"
+                    required
+                  />
+                </div>
+                
+                {!isRegistering && (
+                  <div className="text-right">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsForgotPassword(true);
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                      className="text-[10px] text-gold-500 font-bold hover:underline"
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 rounded-xl gold-gradient text-white font-bold shadow-lg shadow-gold-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (isRegistering ? 'Cadastrar' : 'Entrar')}
+                </button>
+              </form>
+
+              <div className="flex items-center gap-4 py-2">
+                <div className="h-[1px] flex-1 bg-white/10" />
+                <span className="text-[10px] uppercase tracking-widest font-bold text-muted">ou</span>
+                <div className="h-[1px] flex-1 bg-white/10" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="py-3 rounded-xl bg-white text-black font-bold flex items-center justify-center gap-2 shadow-xl hover:bg-gray-100 transition-all disabled:opacity-50 text-xs"
+                >
+                  <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" referrerPolicy="no-referrer" />
+                  Google
+                </button>
+                <button 
+                  onClick={handleAppleLogin}
+                  disabled={loading}
+                  className="py-3 rounded-xl bg-black text-white font-bold flex items-center justify-center gap-2 shadow-xl hover:bg-gray-900 transition-all disabled:opacity-50 text-xs"
+                >
+                  <Apple className="w-4 h-4" />
+                  Apple
+                </button>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setIsRegistering(!isRegistering);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="text-xs text-gold-500 font-bold hover:underline"
+              >
+                {isRegistering ? 'Já tem uma conta? Entrar' : 'Não tem uma conta? Cadastrar'}
+              </button>
+            </>
+          )}
+
+          {error && <p className="text-rose-500 text-xs font-medium">{error}</p>}
+          {success && <p className="text-emerald-500 text-xs font-medium">{success}</p>}
+
+          <p className="text-[10px] text-muted leading-relaxed">
+            Ao entrar, você concorda com nossos termos de uso e política de privacidade. 
+            O acesso é liberado automaticamente após a confirmação do pagamento no Kiwify.
+          </p>
+        </div>
+
+        <div className="pt-8">
+          <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Ainda não tem acesso?</p>
+          <a 
+            href="https://kiwify.com.br" // Substituir pelo link real de vendas
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-gold-500 text-xs font-bold hover:underline mt-2 inline-block"
+          >
+            Adquirir o treinamento agora
+          </a>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 export default function App() {
   const [view, setView] = useState<'home' | 'day' | 'crisis' | 'checklist' | 'declarations' | 'diary' | 'profile' | 'congratulations' | 'admin'>('home');
-  const [user, setUser] = useState<User | null>({
-    id: 'guest',
-    email: 'guest@example.com',
-    name: 'Visitante',
-    plan: 'premium',
-    streak: 0,
-    progress: 0,
-    last_access: new Date().toISOString(),
-    last_completion_date: ''
-  });
+  const [user, setUser] = useState<User | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [achievements, setAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [isAuthReady, setIsAuthReady] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [cachedDaysCount, setCachedDaysCount] = useState(0);
@@ -2233,9 +2580,55 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Auth logic removed to start from zero
-    setIsAuthReady(true);
-    setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setFirebaseUser(firebaseUser);
+      
+      if (firebaseUser?.email) {
+        try {
+          // Tenta buscar do backend (SQLite via Kiwify)
+          const res = await fetch(`/api/user?email=${encodeURIComponent(firebaseUser.email)}`);
+          if (res.ok) {
+            const userData = await res.json();
+            const fullUser = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: firebaseUser.displayName || userData.name || 'Usuário',
+              plan: userData.plan || 'free',
+              streak: userData.streak || 0,
+              progress: userData.progress || 0,
+              last_access: userData.last_access || new Date().toISOString()
+            };
+            setUser(fullUser);
+            // Salva no cache para uso offline
+            localStorage.setItem(`user_cache_${firebaseUser.uid}`, JSON.stringify(fullUser));
+          } else {
+            // Se não encontrar no backend, tenta o cache
+            const cached = localStorage.getItem(`user_cache_${firebaseUser.uid}`);
+            if (cached) {
+              setUser(JSON.parse(cached));
+            } else {
+              setUser(null);
+            }
+          }
+        } catch (err) {
+          console.error("Erro ao verificar acesso:", err);
+          // Erro de rede ou outro, tenta o cache
+          const cached = localStorage.getItem(`user_cache_${firebaseUser.uid}`);
+          if (cached) {
+            setUser(JSON.parse(cached));
+          } else {
+            setUser(null);
+          }
+        }
+      } else {
+        setUser(null);
+      }
+      
+      setIsAuthReady(true);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -2246,6 +2639,19 @@ export default function App() {
 
   const fetchAchievements = async () => {
     if (!user) return;
+    
+    // Tenta carregar do cache primeiro para exibição imediata
+    const cached = localStorage.getItem(`achievements_cache_${user.id}`);
+    if (cached) {
+      try {
+        setAchievements(JSON.parse(cached));
+      } catch (e) {
+        console.error("[Achievements] Error parsing cache:", e);
+      }
+    }
+
+    if (!navigator.onLine) return;
+
     console.log("[Achievements] Fetching for user:", user.id);
     try {
       // Fetch all achievement definitions from backend
@@ -2279,6 +2685,8 @@ export default function App() {
 
       console.log("[Achievements] Merged:", merged.filter((a: any) => a.earned_at).length, "earned of", merged.length);
       setAchievements(merged);
+      // Salva no cache
+      localStorage.setItem(`achievements_cache_${user.id}`, JSON.stringify(merged));
     } catch (err) {
       console.error("[Achievements] Error fetching:", err);
     }
@@ -2299,14 +2707,15 @@ export default function App() {
     document.documentElement.classList.toggle('light', newTheme === 'light');
   };
 
-  const handleLogin = (fUser: FirebaseUser) => {
-    // Login logic removed
-  };
-
   const handleLogout = async () => {
-    setUser(null);
-    setFirebaseUser(null);
-    setView('home');
+    try {
+      await signOut(auth);
+      setUser(null);
+      setFirebaseUser(null);
+      setView('home');
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
   };
 
 
@@ -2583,17 +2992,19 @@ export default function App() {
     }
   };
 
-  if (loading && !currentDay && view === 'home') {
+  if (!isAuthReady || (loading && !currentDay && view === 'home')) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-app">
-        <div className="flex flex-col items-center gap-4">
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-            className="w-10 h-10 border-2 border-gold-500 border-t-transparent rounded-full"
-          />
-          <p className="text-xs font-bold uppercase tracking-widest text-gold-500 animate-pulse">Carregando Jornada...</p>
-        </div>
+      <div className="min-h-screen bg-app flex flex-col items-center justify-center space-y-4">
+        <motion.div 
+          animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="w-16 h-16 gold-gradient rounded-2xl flex items-center justify-center shadow-2xl shadow-gold-500/20"
+        >
+          <Flame className="w-8 h-8 text-white" />
+        </motion.div>
+        <p className="text-[10px] uppercase tracking-widest font-bold text-gold-500 animate-pulse">
+          Preparando sua Jornada...
+        </p>
       </div>
     );
   }
@@ -2605,54 +3016,64 @@ export default function App() {
           {!isOnline && <OfflineBanner />}
         </AnimatePresence>
         <AnimatePresence mode="wait">
-          {view === 'home' && user && (
-            <HomePage 
-              user={user} 
-              onStartDay={startDay}
-              onOpenCrisis={() => setView('crisis')}
-              onOpenChecklist={() => setView('checklist')}
-              onOpenDeclarations={() => setView('declarations')} 
-              onOpenProfile={() => setView('profile')}
-              onOpenDiary={() => setView('diary')}
-              onOpenAdmin={() => setView('admin')}
-              onOpenCongratulations={() => setView('congratulations')}
-              theme={theme}
-              onToggleTheme={toggleTheme}
-              deferredPrompt={deferredPrompt}
-              onInstall={handleInstall}
-              isOnline={isOnline}
-              cachedDaysCount={cachedDaysCount}
-            />
-          )}
-          {view === 'day' && currentDay && user && (
-            <DayDetail 
-              day={currentDay} 
-              userId={user.id}
-              onComplete={completeDay} 
-              onBack={() => setView('home')} 
-            />
-          )}
-          {view === 'crisis' && <CrisisMode onBack={() => setView('home')} />}
-          {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
-          {view === 'checklist' && user && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
-          {view === 'diary' && user && (
-            <DiaryPage 
-              userId={user.id} 
-              onBack={() => setView('home')} 
-            />
-          )}
-          {view === 'admin' && <AdminPage onBack={() => setView('home')} currentUser={user} />}
-          {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
-          {view === 'profile' && user && (
-            <ProfilePage 
-              user={user} 
-              achievements={achievements} 
-              onBack={() => setView('home')} 
-              onLogout={handleLogout} 
-              deferredPrompt={deferredPrompt} 
-              onInstall={handleInstall}
-              onOpenCongratulations={() => setView('congratulations')}
-            />
+          {!user ? (
+            firebaseUser ? (
+              <PendingAccess firebaseUser={firebaseUser} onLogout={handleLogout} />
+            ) : (
+              <LoginView />
+            )
+          ) : (
+            <>
+              {view === 'home' && (
+                <HomePage 
+                  user={user} 
+                  onStartDay={startDay}
+                  onOpenCrisis={() => setView('crisis')}
+                  onOpenChecklist={() => setView('checklist')}
+                  onOpenDeclarations={() => setView('declarations')} 
+                  onOpenProfile={() => setView('profile')}
+                  onOpenDiary={() => setView('diary')}
+                  onOpenAdmin={() => setView('admin')}
+                  onOpenCongratulations={() => setView('congratulations')}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  deferredPrompt={deferredPrompt}
+                  onInstall={handleInstall}
+                  isOnline={isOnline}
+                  cachedDaysCount={cachedDaysCount}
+                />
+              )}
+              {view === 'day' && currentDay && (
+                <DayDetail 
+                  day={currentDay} 
+                  userId={user.id}
+                  onComplete={completeDay} 
+                  onBack={() => setView('home')} 
+                />
+              )}
+              {view === 'crisis' && <CrisisMode onBack={() => setView('home')} />}
+              {view === 'declarations' && <DeclarationsPage onBack={() => setView('home')} />}
+              {view === 'checklist' && <ChecklistPage userId={user.id} onBack={() => setView('home')} />}
+              {view === 'diary' && (
+                <DiaryPage 
+                  userId={user.id} 
+                  onBack={() => setView('home')} 
+                />
+              )}
+              {view === 'admin' && <AdminPage onBack={() => setView('home')} currentUser={user} />}
+              {view === 'congratulations' && <CongratulationsPage onBack={() => setView('home')} />}
+              {view === 'profile' && (
+                <ProfilePage 
+                  user={user} 
+                  achievements={achievements} 
+                  onBack={() => setView('home')} 
+                  onLogout={handleLogout} 
+                  deferredPrompt={deferredPrompt} 
+                  onInstall={handleInstall}
+                  onOpenCongratulations={() => setView('congratulations')}
+                />
+              )}
+            </>
           )}
         </AnimatePresence>
 

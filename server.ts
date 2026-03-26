@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import webpush from "web-push";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -367,37 +368,69 @@ async function startServer() {
   });
 
   // Webhook para Kiwify
+  // Configure este URL no Kiwify: https://seu-app.run.app/api/webhook/kiwify?token=SEU_TOKEN
   app.post("/api/webhook/kiwify", (req, res) => {
     try {
       // Verificação de segurança (Token secreto configurado no Kiwify e no .env)
       const kiwifyToken = process.env.KIWIFY_TOKEN;
-      const receivedToken = req.query.token || req.headers['x-kiwify-signature'];
+      const kiwifySecret = process.env.KIWIFY_SECRET;
+      const receivedToken = req.query.token;
+      const signature = req.headers['x-kiwify-signature'];
 
-      if (kiwifyToken && receivedToken !== kiwifyToken) {
-        console.warn("Tentativa de acesso não autorizado ao Webhook Kiwify.");
+      // Se um token for fornecido via query param, verificamos ele primeiro (mais simples)
+      if (kiwifyToken && receivedToken && receivedToken !== kiwifyToken) {
+        console.warn("Tentativa de acesso não autorizado ao Webhook Kiwify (Token inválido).");
+        return res.status(401).send("Unauthorized");
+      }
+
+      // Se uma assinatura for fornecida via header, verificamos usando o segredo (mais seguro)
+      if (kiwifySecret && signature) {
+        const hmac = crypto.createHmac('sha1', kiwifySecret);
+        hmac.update(JSON.stringify(req.body));
+        const expectedSignature = hmac.digest('hex');
+        
+        if (signature !== expectedSignature) {
+          console.warn("Tentativa de acesso não autorizado ao Webhook Kiwify (Assinatura inválida).");
+          return res.status(401).send("Unauthorized");
+        }
+      }
+
+      // Se nenhum dos dois for fornecido mas um deles for obrigatório, barramos
+      if ((kiwifyToken && !receivedToken) && (kiwifySecret && !signature)) {
+        console.warn("Tentativa de acesso não autorizado ao Webhook Kiwify (Sem credenciais).");
         return res.status(401).send("Unauthorized");
       }
 
       const { order_status, customer } = req.body;
 
-      // Log para debug (opcional)
-      console.log("Webhook Kiwify recebido:", { order_status, email: customer?.email });
+      if (!customer?.email) {
+        return res.status(400).send("Bad Request: Missing customer email");
+      }
+
+      const email = customer.email.toLowerCase().trim();
+      const name = customer.full_name || email.split('@')[0];
+
+      // Log para debug
+      console.log(`[Kiwify Webhook] Status: ${order_status}, Email: ${email}`);
 
       // Kiwify envia 'paid' ou 'approved' dependendo da versão/configuração
       if (order_status === "paid" || order_status === "approved") {
-        const email = customer.email.toLowerCase().trim();
-        const name = customer.full_name || email.split('@')[0];
-
         // Verifica se o usuário já existe
         const existingUser = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
 
         if (!existingUser) {
           const id = Math.random().toString(36).substring(2, 15);
-          db.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").run(id, email, name);
+          db.prepare("INSERT INTO users (id, email, name, plan) VALUES (?, ?, ?, ?)").run(id, email, name, 'premium');
           console.log(`Novo comprador liberado: ${email}`);
         } else {
-          console.log(`Comprador já possuía acesso: ${email}`);
+          // Garante que o plano está como premium
+          db.prepare("UPDATE users SET plan = 'premium' WHERE email = ?").run(email);
+          console.log(`Comprador já possuía acesso, plano atualizado: ${email}`);
         }
+      } else if (order_status === "refunded" || order_status === "chargedback" || order_status === "canceled") {
+        // Revoga acesso
+        db.prepare("DELETE FROM users WHERE email = ?").run(email);
+        console.log(`Acesso revogado para: ${email} (Status: ${order_status})`);
       }
 
       // Sempre retorne 200 para o Kiwify não tentar reenviar
