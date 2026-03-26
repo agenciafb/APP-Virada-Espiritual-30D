@@ -1618,6 +1618,22 @@ const ProfilePage = ({ user, achievements, onBack, onLogout, deferredPrompt, onI
                 </button>
               )}
 
+              <button 
+                onClick={() => window.open('mailto:codigosdafe2025@gmail.com', '_blank')}
+                className="w-full glass-card p-6 text-left flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-bold uppercase tracking-widest text-sm block">Suporte</span>
+                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold">Enviar E-mail</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted group-hover:translate-x-1 transition-all opacity-30" />
+              </button>
+
               <button onClick={onLogout} className="w-full glass-card p-6 text-left text-red-500 flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
@@ -2200,6 +2216,57 @@ const AdminPage = ({ onBack, currentUser }: { onBack: () => void, currentUser: U
   );
 };
 
+const TermsModal = ({ isOpen, onClose, type }: { isOpen: boolean, onClose: () => void, type: 'terms' | 'privacy' }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="glass-card w-full max-w-2xl max-h-[80vh] overflow-y-auto p-8 relative"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-muted hover:text-white transition-colors">
+          <X className="w-6 h-6" />
+        </button>
+        <h2 className="text-2xl display-bold gold-text mb-6">
+          {type === 'terms' ? 'Termos de Uso' : 'Política de Privacidade'}
+        </h2>
+        <div className="space-y-4 text-sm text-muted leading-relaxed text-left">
+          {type === 'terms' ? (
+            <>
+              <p className="font-bold text-white">1. Aceitação dos Termos</p>
+              <p>Ao acessar o aplicativo Virada Espiritual 30D, você concorda em cumprir estes termos de serviço, todas as leis e regulamentos aplicáveis.</p>
+              <p className="font-bold text-white">2. Licença de Uso</p>
+              <p>É concedida permissão para baixar temporariamente uma cópia dos materiais no aplicativo apenas para visualização pessoal e não comercial.</p>
+              <p className="font-bold text-white">3. Isenção de Responsabilidade</p>
+              <p>Os materiais no aplicativo são fornecidos 'como estão'. Não oferecemos garantias, expressas ou implícitas, e por este meio isentamos todas as outras garantias.</p>
+              <p className="font-bold text-white">4. Limitações</p>
+              <p>Em nenhum caso o Virada Espiritual 30D ou seus fornecedores serão responsáveis por quaisquer danos decorrentes do uso ou da incapacidade de usar os materiais.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-white">1. Coleta de Dados</p>
+              <p>Coletamos informações básicas como e-mail e nome para gerenciar seu acesso e progresso na jornada de 30 dias.</p>
+              <p className="font-bold text-white">2. Uso das Informações</p>
+              <p>Seus dados são utilizados exclusivamente para personalizar sua experiência, enviar notificações (se autorizado) e processar pagamentos via Kiwify.</p>
+              <p className="font-bold text-white">3. Segurança</p>
+              <p>Implementamos medidas de segurança para proteger suas informações pessoais contra acesso não autorizado ou alteração.</p>
+              <p className="font-bold text-white">4. Cookies</p>
+              <p>Utilizamos cookies e armazenamento local para manter sua sessão ativa e salvar seu progresso offline.</p>
+            </>
+          )}
+        </div>
+        <button 
+          onClick={onClose}
+          className="w-full mt-8 py-3 rounded-xl gold-gradient text-white font-bold"
+        >
+          Entendi
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
 const PendingAccess = ({ firebaseUser, onLogout }: { firebaseUser: FirebaseUser, onLogout: () => void }) => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-8 bg-app">
@@ -2260,6 +2327,7 @@ const LoginView = () => {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [showLegal, setShowLegal] = useState<{ open: boolean, type: 'terms' | 'privacy' }>({ open: false, type: 'terms' });
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -2493,23 +2561,34 @@ const LoginView = () => {
           {error && <p className="text-rose-500 text-xs font-medium">{error}</p>}
           {success && <p className="text-emerald-500 text-xs font-medium">{success}</p>}
 
-          <p className="text-[10px] text-muted leading-relaxed">
-            Ao entrar, você concorda com nossos termos de uso e política de privacidade. 
-            O acesso é liberado automaticamente após a confirmação do pagamento no Kiwify.
-          </p>
+          <div className="space-y-4">
+            <p className="text-[10px] text-muted leading-relaxed">
+              Ao entrar, você concorda com nossos{' '}
+              <button onClick={() => setShowLegal({ open: true, type: 'terms' })} className="text-gold-500 font-bold hover:underline">Termos de Uso</button> e{' '}
+              <button onClick={() => setShowLegal({ open: true, type: 'privacy' })} className="text-gold-500 font-bold hover:underline">Política de Privacidade</button>. 
+              O acesso é liberado automaticamente após a confirmação do pagamento no Kiwify.
+            </p>
+          </div>
         </div>
 
         <div className="pt-8">
           <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Ainda não tem acesso?</p>
           <a 
-            href="https://kiwify.com.br" // Substituir pelo link real de vendas
+            href="https://pay.kiwify.com.br/zg75zYX" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-gold-500 text-xs font-bold hover:underline mt-2 inline-block"
+            className="w-full mt-4 py-4 rounded-2xl gold-gradient text-white font-bold shadow-xl shadow-gold-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
           >
+            <Flame className="w-5 h-5" />
             Adquirir o treinamento agora
           </a>
         </div>
+
+        <TermsModal 
+          isOpen={showLegal.open} 
+          onClose={() => setShowLegal({ ...showLegal, open: false })} 
+          type={showLegal.type} 
+        />
       </motion.div>
     </div>
   );
